@@ -1,6 +1,7 @@
 // RobotRL includes
 #include "display.h"
 #include "menu.h"
+#include "game.h"
 #include "shutdown.h"
 #include "listeners.h"
 #include "log.h"
@@ -252,7 +253,7 @@ int writeChar( unsigned int c, sf::Color fg, sf::Color bg, int x, int y )
 
 int writeString( std::string s, sf::Color fg, sf::Color bg, int x, int y )
 {
-   for( int i = 0; i < s.length(); ++i ) {
+   for( unsigned int i = 0; i < s.length(); ++i ) {
       if (x+i >= 80) break;
 
       writeChar( s[i], fg, bg, x+i, y );
@@ -260,7 +261,7 @@ int writeString( std::string s, sf::Color fg, sf::Color bg, int x, int y )
    return 0;
 }
 
-int invert( int x_base, int y_base, int x_end, int y_end )
+int colorInvert( int x_base, int y_base, int x_end, int y_end )
 {
    for( int y = y_base; y <= y_end; ++y ) {
       for( int x = x_base; x <= x_end; ++x ) { 
@@ -274,6 +275,18 @@ int invert( int x_base, int y_base, int x_end, int y_end )
          back.g = 255 - back.g;
          back.b = 255 - back.b;
          display_array[y][x].bg = back;
+      }
+   }
+   return 0;
+}
+
+int colorSwitch( int x_base, int y_base, int x_end, int y_end )
+{
+   for( int y = y_base; y <= y_end; ++y ) {
+      for( int x = x_base; x <= x_end; ++x ) { 
+         Color fore = display_array[y][x].fg;
+         display_array[y][x].fg = display_array[y][x].bg;
+         display_array[y][x].bg = fore;
       }
    }
    return 0;
@@ -366,8 +379,13 @@ bool MainKeyListener::keyPressed( const sf::Event::KeyEvent &key_press )
    if (key_press.code == sf::Keyboard::Q)
       shutdown(1,1);
 
-   if (app_state == MAIN_MENU)
-      passKeyToMenu( key_press.code );
+   if (app_state == MAIN_MENU) {
+      if (passKeyToMenu( key_press.code ) == 1) // Game is ready to play
+         app_state = IN_GAME;
+   }
+   else if (app_state == IN_GAME) {
+      sendKeyToGame( key_press.code );
+   }
 
    return true;
 }
@@ -454,7 +472,7 @@ int runApp()
 
       } else if (app_state == IN_GAME) {
    
-         r_window->display();
+         displayGame();
       }
    }
 
