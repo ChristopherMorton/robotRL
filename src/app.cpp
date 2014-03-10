@@ -235,12 +235,13 @@ void clearDisplay()
 {
    r_window->clear(sf::Color::Black);
 
-   for (int i = 0; i < 30; ++i)
+   for (int i = 0; i < 30; ++i) {
       for (int j = 0; j < 80; ++j) {
-         display_array[i][j].fg == sf::Color::White;
-         display_array[i][j].bg == sf::Color::Black;
+         display_array[i][j].fg = sf::Color::White;
+         display_array[i][j].bg = sf::Color::Black;
          display_array[i][j].u_c = ' ';
       }
+   }
 }
 
 int writeChar( unsigned int c, sf::Color fg, sf::Color bg, int x, int y )
@@ -255,6 +256,25 @@ int writeString( std::string s, sf::Color fg, sf::Color bg, int x, int y )
       if (x+i >= 80) break;
 
       writeChar( s[i], fg, bg, x+i, y );
+   }
+   return 0;
+}
+
+int invert( int x_base, int y_base, int x_end, int y_end )
+{
+   for( int y = y_base; y <= y_end; ++y ) {
+      for( int x = x_base; x <= x_end; ++x ) { 
+         Color fore = display_array[y][x].fg;
+         fore.r = 255 - fore.r;
+         fore.g = 255 - fore.g;
+         fore.b = 255 - fore.b;
+         display_array[y][x].fg = fore;
+         Color back = display_array[y][x].bg;
+         back.r = 255 - back.r;
+         back.g = 255 - back.g;
+         back.b = 255 - back.b;
+         display_array[y][x].bg = back;
+      }
    }
    return 0;
 }
@@ -433,21 +453,7 @@ int runApp()
          displayMenu();
 
       } else if (app_state == IN_GAME) {
-
-         new_time = clock.getElapsedTime().asMilliseconds();
-         dt = new_time - old_time;
-         old_time = new_time;
-
-         event_manager->handleEvents();
-
-         gui_manager->begin();
    
-         r_window->display();
-
-         gui_manager->end();
-
-         cursor_manager->drawCursor();
-
          r_window->display();
       }
    }

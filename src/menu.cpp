@@ -14,15 +14,14 @@ sf::Color MenuBG = sf::Color::Black;
 
 void displayMenu()
 {
-   if (menu_selection == 1)
-      writeString(" New Game ", MenuBG, MenuFG, 36, 14);
-   else
-      writeString(" New Game ", MenuFG, MenuBG, 36, 14);
+   writeString("New Game", MenuFG, MenuBG, 36, 14); 
+   writeString("  Quit", MenuFG, MenuBG, 36, 15);
 
+   int inv_row = 14;
    if (menu_selection == 2)
-      writeString("   Quit   ", MenuBG, MenuFG, 36, 15);
-   else
-      writeString("   Quit   ", MenuFG, MenuBG, 36, 15);
+      inv_row = 15;
+
+   invert( 33, inv_row, 46, inv_row );
    
    drawDisplay();
 }
