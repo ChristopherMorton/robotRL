@@ -204,14 +204,30 @@ int loadingAnimation(int dt)
 // Display array
 //////////////////////////////////////////////////////////////////////
 
-char **display_array;
+struct ColorChar {
+   sf::Color fg;
+   sf::Color bg;
+   unsigned int u_c;
+
+   ColorChar( sf::Color fore, sf::Color back, unsigned int c) {
+      fg = fore; bg = back; u_c = c; 
+   }
+   ColorChar() {
+      fg = sf::Color::White;
+      bg = sf::Color::Black;
+      u_c = ' ';
+   }
+};
+
+ColorChar **display_array;
 
 void initDisplayArray()
 {
    log("Init display_array");
-   display_array = new char*[30];
+
+   display_array = new ColorChar*[30];
    for (int i = 0; i < 30; ++i)
-      display_array[i] = new char[80];
+      display_array[i] = new ColorChar[80];
 }
 
 void clearDisplay()
@@ -219,22 +235,27 @@ void clearDisplay()
    r_window->clear(sf::Color::Black);
 
    for (int i = 0; i < 30; ++i)
-      for (int j = 0; j < 80; ++j)
-         display_array[i][j] = ' ';
+      for (int j = 0; j < 80; ++j) {
+         display_array[i][j].fg == sf::Color::White;
+         display_array[i][j].bg == sf::Color::Black;
+         display_array[i][j].u_c = ' ';
+      }
 }
 
-int writeChar( unsigned int c, sf::Color color, int x, int y )
+int writeChar( unsigned int c, sf::Color fg, sf::Color bg, int x, int y )
 {
-   display_array[y][x] = (char)c;
+   display_array[y][x] = ColorChar( fg, bg, c );
+   return 0;
 }
 
-int writeString( std::string s, sf::Color color, int x, int y )
+int writeString( std::string s, sf::Color fg, sf::Color bg, int x, int y )
 {
    for( int i = 0; i < s.length(); ++i ) {
       if (x+i >= 80) break;
 
-      display_array[y][x+i] = s[i];
+      display_array[y][x+i] = ColorChar( fg, bg, s[i] );
    }
+   return 0;
 }
 
 void drawDisplay()
@@ -242,12 +263,18 @@ void drawDisplay()
    sf::Text c;
    c.setFont(font);
    c.setCharacterSize(16);
-   c.setColor(sf::Color::White);
 
    for (int i = 0; i < 30; ++i) {
       for (int j = 0; j < 80; ++j) {
-         c.setString( display_array[i][j] );
+         ColorChar cc = display_array[i][j];
+
+         if (cc.bg != sf::Color::Black) {
+            // Draw backing rectangle
+         }
+
+         c.setString( cc.u_c );
          c.setPosition(j*10, i*20);
+         c.setColor( cc.fg );
          r_window->draw(c);
       }
    }
@@ -397,8 +424,8 @@ int runApp()
 
          // Display options
 
-         writeString("New Game", sf::Color::White, 0, 0);
-         writeString("0.........1.........2.........3.........4.........5.........6.........7.........8.........9.........", sf::Color::Yellow, 0, 1);
+         writeString("New Game", sf::Color::White, sf::Color::Black, 0, 0);
+         writeString("0.........1.........2.........3.........4.........5.........6.........7.........8.........9.........", sf::Color::Yellow, sf::Color::Black, 0, 1);
 
          drawDisplay();
 
