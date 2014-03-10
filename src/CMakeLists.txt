@@ -1,4 +1,4 @@
-set(APP_FILES app.cpp shutdown.cpp util.cpp log.cpp)
+set(APP_FILES app.cpp menu.cpp shutdown.cpp util.cpp log.cpp)
 
 add_executable(RobotRL ${APP_FILES})
 

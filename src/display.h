@@ -6,8 +6,8 @@
 
 void clearDisplay();
 
-int writeChar( unsigned int c, sf::Color color, int x, int y );
-int writeString( std::string s, sf::Color color, int x, int y );
+int writeChar( unsigned int c, sf::Color fg, sf::Color bg, int x, int y );
+int writeString( std::string s, sf::Color fg, sf::Color bg, int x, int y );
 
 void drawDisplay();
 

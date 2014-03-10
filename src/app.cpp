@@ -1,5 +1,6 @@
 // RobotRL includes
 #include "display.h"
+#include "menu.h"
 #include "shutdown.h"
 #include "listeners.h"
 #include "log.h"
@@ -253,7 +254,7 @@ int writeString( std::string s, sf::Color fg, sf::Color bg, int x, int y )
    for( int i = 0; i < s.length(); ++i ) {
       if (x+i >= 80) break;
 
-      display_array[y][x+i] = ColorChar( fg, bg, s[i] );
+      writeChar( s[i], fg, bg, x+i, y );
    }
    return 0;
 }
@@ -264,12 +265,17 @@ void drawDisplay()
    c.setFont(font);
    c.setCharacterSize(16);
 
+   sf::RectangleShape backing(sf::Vector2f(10, 20));
+
    for (int i = 0; i < 30; ++i) {
       for (int j = 0; j < 80; ++j) {
          ColorChar cc = display_array[i][j];
 
          if (cc.bg != sf::Color::Black) {
             // Draw backing rectangle
+            backing.setFillColor( cc.bg );
+            backing.setPosition(j*10, i*20);
+            r_window->draw(backing);
          }
 
          c.setString( cc.u_c );
@@ -339,6 +345,9 @@ bool MainKeyListener::keyPressed( const sf::Event::KeyEvent &key_press )
 {
    if (key_press.code == sf::Keyboard::Q)
       shutdown(1,1);
+
+   if (app_state == MAIN_MENU)
+      passKeyToMenu( key_press.code );
 
    return true;
 }
@@ -420,14 +429,8 @@ int runApp()
       clearDisplay();
 
       if (app_state == MAIN_MENU) { 
-         // Display main menu
 
-         // Display options
-
-         writeString("New Game", sf::Color::White, sf::Color::Black, 0, 0);
-         writeString("0.........1.........2.........3.........4.........5.........6.........7.........8.........9.........", sf::Color::Yellow, sf::Color::Black, 0, 1);
-
-         drawDisplay();
+         displayMenu();
 
       } else if (app_state == IN_GAME) {
 
