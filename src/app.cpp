@@ -380,7 +380,7 @@ bool MainKeyListener::keyPressed( const sf::Event::KeyEvent &key_press )
       shutdown(1,1);
 
    if (app_state == MAIN_MENU) {
-      if (passKeyToMenu( key_press.code ) == 1) // Game is ready to play
+      if (sendKeyToMenu( key_press.code ) == 1) // Game is ready to play
          app_state = IN_GAME;
    }
    else if (app_state == IN_GAME) {
@@ -472,6 +472,7 @@ int runApp()
 
       } else if (app_state == IN_GAME) {
    
+         playGame();
          displayGame();
       }
    }

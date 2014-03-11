@@ -9,6 +9,7 @@
  */
 
 #include <SFML/Window.hpp>
+#include "structures.h"
 
 void newGame();
 void loadGame();
@@ -16,6 +17,14 @@ void loadGame();
 void testLevel();
 
 int sendKeyToGame( sf::Keyboard::Key k );
+
+int playGame();
 int displayGame();
+
+// Interface to data
+
+extern Level* current_level;
+
+int moveUnit( Unit*, Direction );
 
 #endif

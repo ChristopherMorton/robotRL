@@ -36,7 +36,7 @@ void displayMenu()
    }
 }
 
-int passKeyToMenu( sf::Keyboard::Key k )
+int sendKeyToMenu( sf::Keyboard::Key k )
 {
    if (k == sf::Keyboard::Up) {
       menu_selection--;

@@ -4,6 +4,6 @@
 #include <SFML/Window.hpp>
 
 void displayMenu();
-int passKeyToMenu( sf::Keyboard::Key k ); // Returns 1 when game begins
+int sendKeyToMenu( sf::Keyboard::Key k ); // Returns 1 when game begins
 
 #endif
