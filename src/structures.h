@@ -40,9 +40,13 @@ struct Location {
    Location();
 };
 
+#define MAP_VISIBLE 0x1
+#define MAP_SEEN 0x4
+
 struct Level {
    int x_dim, y_dim;
    Location **map;
+   int **vision_map;
    Level* *exits; // Indexed array of exits (Level*)
 
    Level( int x, int y );

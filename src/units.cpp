@@ -14,6 +14,7 @@ Unit::Unit() {
    pos_x = 0;
    pos_y = 0;
    move_speed = 1000;
+   vision_range = 5;
 }
 
 Unit::Unit( unsigned int d_c ) {
@@ -35,6 +36,7 @@ RandomRobo::RandomRobo() {
    pos_x = 0;
    pos_y = 0;
    move_speed = 1000;
+   vision_range = 5;
 }
 
 RandomRobo::~RandomRobo() { }
@@ -42,7 +44,7 @@ RandomRobo::~RandomRobo() { }
 int RandomRobo::takeTurn() {
    int x = rand() % 8;
    moveUnit( this, (Direction) x );
-   return 1000;
+   return move_speed;
 }
 
 AI::AI() {
@@ -52,6 +54,7 @@ AI::AI() {
    pos_x = 0;
    pos_y = 0;
    move_speed = 1000;
+   vision_range = 5;
 }
 
 AI::~AI() { }
@@ -69,6 +72,7 @@ Player::Player() {
    pos_x = 0;
    pos_y = 0;
    move_speed = 700;
+   vision_range = 5;
 }
 
 Player::~Player() { }

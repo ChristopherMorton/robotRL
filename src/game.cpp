@@ -9,6 +9,7 @@
 #include <queue>
 #include <stack>
 #include <sstream>
+#include <cmath>
 
 //////////////////////////////////////////////////////////////////////
 // Persistent Data
@@ -23,6 +24,19 @@ Unit* current_unit;
 sf::Vector2u map_view_base; // The 0,0 of the view
 
 bool waiting_for_input;
+
+enum GameState
+{
+   ON_MAP,
+   SELECTING_ABILITY,
+   TARGETTING,
+   TEXT_PAUSE,
+   INVENTORY_SCREEN,
+   EQUIP_SCREEN,
+   HELP_SCREEN
+};
+
+GameState game_state;
 
 unsigned long int ticks; // 'ticks' since game started
 
@@ -124,11 +138,103 @@ int moveUnit( Unit* unit, Direction dir )
 
    putUnit( unit, x_dest, y_dest );
 
-   addUnitToQueue( unit, unit->move_speed );
-   clearCurrentUnit();
-
    return 0;
 
+}
+
+//////////////////////////////////////////////////////////////////////
+// LOS
+//////////////////////////////////////////////////////////////////////
+
+typedef unsigned int uint;
+
+static int multipliers[4][8] = {
+    {1, 0, 0, -1, -1, 0, 0, 1},
+    {0, 1, -1, 0, 0, -1, 1, 0},
+    {0, 1, 1, 0, 0, -1, -1, 0},
+    {1, 0, 0, 1, -1, 0, 0, -1}
+};
+
+void blankVision()
+{
+   int x_dim = current_level->x_dim, y_dim = current_level->y_dim;
+   for (int i = 0; i < x_dim; ++i) {
+      for (int j = 0; j < y_dim; ++j) {
+         current_level->vision_map[j][i] &= ~MAP_VISIBLE;
+      }
+   }
+}
+
+void castLight(uint x, uint y, uint radius, uint row,
+        float start_slope, float end_slope, uint xx, uint xy, uint yx,
+        uint yy) {
+
+    if (start_slope < end_slope) {
+        return;
+    }
+
+    float next_start_slope = start_slope;
+    for (uint i = row; i <= radius; i++) {
+        bool blocked = false;
+        for (int dx = -i, dy = -i; dx <= 0; dx++) {
+            float l_slope = (dx - 0.5) / (dy + 0.5);
+            float r_slope = (dx + 0.5) / (dy - 0.5);
+            if (start_slope < r_slope) {
+                continue;
+            } else if (end_slope > l_slope) {
+                break;
+            }
+
+            int sax = dx * xx + dy * xy;
+            int say = dx * yx + dy * yy;
+            if ((sax < 0 && (uint)std::abs(sax) > x) ||
+                    (say < 0 && (uint)std::abs(say) > y)) {
+                continue;
+            }
+            uint ax = x + sax;
+            uint ay = y + say;
+            if (ax >= current_level->x_dim || ay >= current_level->y_dim) {
+                continue;
+            }
+
+            uint radius2 = radius * radius;
+            if ((uint)(dx * dx + dy * dy) < radius2) {
+               current_level->vision_map[ay][ax] |= MAP_VISIBLE | MAP_SEEN;
+            }
+
+            if (blocked) {
+                if (current_level->map[ay][ax].ter <= IMPASSABLE_WALL) {
+                    next_start_slope = r_slope;
+                    continue;
+                } else {
+                    blocked = false;
+                    start_slope = next_start_slope;
+                }
+            } else if (current_level->map[ay][ax].ter <= IMPASSABLE_WALL) {
+                blocked = true;
+                next_start_slope = r_slope;
+                castLight(x, y, radius, i + 1, start_slope, l_slope, xx,
+                        xy, yx, yy);
+            }
+        }
+        if (blocked) {
+            break;
+        }
+    }
+}
+
+void visionSource(uint x, uint y, uint radius) {
+    for (uint i = 0; i < 8; i++) {
+        castLight(x, y, radius, 1, 1.0, 0.0, multipliers[0][i],
+                multipliers[1][i], multipliers[2][i], multipliers[3][i]);
+    }
+}
+
+void doFOV()
+{
+   blankVision();
+   visionSource( player->pos_x, player->pos_y, player->vision_range );
+   current_level->vision_map[player->pos_y][player->pos_x] |= MAP_VISIBLE | MAP_SEEN;
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -160,6 +266,7 @@ void testLevel()
    for (int i = 30; i <= 40; ++i) {
       tl->map[30][i].ter = IMPASSABLE_WALL;
    }
+   blankVision();
 
    player = new Player();
    putUnit( player, 25, 25 );
@@ -168,6 +275,8 @@ void testLevel()
    Unit* rr = new RandomRobo();
    putUnit( rr, 30, 20 );
    addUnitToQueue( rr, 500 );
+
+   game_state = ON_MAP;
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -177,31 +286,53 @@ void testLevel()
 std::stack<sf::Keyboard::Key> input_stack;
 
 
-#define PLAYERINPUT(key,action) if(k==key){if(current_unit!=player){input_stack.push(k);return 1;}else{action;}}
 
 int sendKeyToGame( sf::Keyboard::Key k )
 {
    if (k == sf::Keyboard::Q)
       shutdown(1, 1);
 
-   // PLAYERINPUT macro will buffer the input while it isn't the player's turn
+   if (!waiting_for_input) {
+      input_stack.push(k);
+      return 1;
+   }
 
-   // Movement
-   PLAYERINPUT(sf::Keyboard::Numpad1,moveUnit(player,SOUTHWEST))
-   else
-   PLAYERINPUT(sf::Keyboard::Numpad2,moveUnit(player,SOUTH))
-   else
-   PLAYERINPUT(sf::Keyboard::Numpad3,moveUnit(player,SOUTHEAST))
-   else
-   PLAYERINPUT(sf::Keyboard::Numpad4,moveUnit(player,WEST))
-   else
-   PLAYERINPUT(sf::Keyboard::Numpad6,moveUnit(player,EAST))
-   else
-   PLAYERINPUT(sf::Keyboard::Numpad7,moveUnit(player,NORTHWEST))
-   else
-   PLAYERINPUT(sf::Keyboard::Numpad8,moveUnit(player,NORTH))
-   else
-   PLAYERINPUT(sf::Keyboard::Numpad9,moveUnit(player,NORTHEAST))
+   if (game_state == TEXT_PAUSE) {
+      if (k == sf::Keyboard::Space || k == sf::Keyboard::Return) {
+         // Continue
+      }
+      return 2;
+   }
+   
+   if (game_state == SELECTING_ABILITY) {
+
+   }
+
+   if (game_state == ON_MAP) {
+      int speed = 0;
+
+      // Movement
+      if(k==sf::Keyboard::Numpad1){moveUnit(player,SOUTHWEST);speed=player->move_speed;}
+      else
+      if(k==sf::Keyboard::Numpad2){moveUnit(player,SOUTH);speed=player->move_speed;}
+      else
+      if(k==sf::Keyboard::Numpad3){moveUnit(player,SOUTHEAST);speed=player->move_speed;}
+      else
+      if(k==sf::Keyboard::Numpad4){moveUnit(player,WEST);speed=player->move_speed;}
+      else
+      if(k==sf::Keyboard::Numpad6){moveUnit(player,EAST);speed=player->move_speed;}
+      else
+      if(k==sf::Keyboard::Numpad7){moveUnit(player,NORTHWEST);speed=player->move_speed;}
+      else
+      if(k==sf::Keyboard::Numpad8){moveUnit(player,NORTH);speed=player->move_speed;}
+      else
+      if(k==sf::Keyboard::Numpad9){moveUnit(player,NORTHEAST);speed=player->move_speed;}
+
+      addUnitToQueue( player, speed );
+      clearCurrentUnit();
+      return 0;
+   }
+
 
    return 0;
 }
@@ -226,7 +357,10 @@ int playGame()
       }
 
       // TODO: AI goes here
-      current_unit->takeTurn();
+      int speed = current_unit->takeTurn();
+      addUnitToQueue( current_unit, speed );
+      clearCurrentUnit();
+
    }
    return 0;
 }
@@ -234,6 +368,8 @@ int playGame()
 int displayGame()
 {
    if (current_level == NULL) return -1;
+
+   doFOV();
 
    for (int x = 0; x < 80; x++) {
       for (int y = 0; y < 28; y++) {
@@ -243,25 +379,29 @@ int displayGame()
                map_y < 0 || map_y >= current_level->y_dim)
             continue;
 
+         int visibility = current_level->vision_map[map_y][map_x];
+         if (visibility == 0)
+            continue;
+
          Location l = current_level->map[map_y][map_x];
 
-         if (l.unit != NULL) {
+         if (l.unit != NULL && visibility & MAP_VISIBLE) {
             l.unit->drawUnit(x, y);
          } else if (l.items != NULL) {
             l.items->drawItem(x, y);
          } else {
-
-         if (l.ter == FLOOR)
-            writeChar( '.', sf::Color::White, sf::Color::Black, x, y );
-         else if (l.ter == IMPASSABLE_WALL)
-            writeChar( ' ', sf::Color::Black, sf::Color::White, x, y );
-         else if (l.ter >= STAIRS_UP_1 && l.ter <= STAIRS_UP_4)
-            writeChar( '<', sf::Color::White, sf::Color::Black, x, y );
-         else if (l.ter >= STAIRS_DOWN_1 && l.ter <= STAIRS_DOWN_4)
-            writeChar( '>', sf::Color::White, sf::Color::Black, x, y );
-
-
+            if (l.ter == FLOOR)
+               writeChar( '.', sf::Color::White, sf::Color::Black, x, y );
+            else if (l.ter == IMPASSABLE_WALL)
+               writeChar( ' ', sf::Color::Black, sf::Color::White, x, y );
+            else if (l.ter >= STAIRS_UP_1 && l.ter <= STAIRS_UP_4)
+               writeChar( '<', sf::Color::White, sf::Color::Black, x, y );
+            else if (l.ter >= STAIRS_DOWN_1 && l.ter <= STAIRS_DOWN_4)
+               writeChar( '>', sf::Color::White, sf::Color::Black, x, y );
          }
+
+         if (visibility & MAP_SEEN && !(visibility & MAP_VISIBLE))
+            dim( x, y, x, y );
       }
    }
 

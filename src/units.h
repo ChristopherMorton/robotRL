@@ -10,6 +10,7 @@ struct Unit
    int pos_x, pos_y;
 
    int move_speed;
+   int vision_range;
 
    Chassis *chassis;
    Item *inventory;

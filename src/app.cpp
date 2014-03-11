@@ -292,6 +292,25 @@ int colorSwitch( int x_base, int y_base, int x_end, int y_end )
    return 0;
 }
 
+int dim( int x_base, int y_base, int x_end, int y_end )
+{
+   for( int y = y_base; y <= y_end; ++y ) {
+      for( int x = x_base; x <= x_end; ++x ) { 
+         Color fore = display_array[y][x].fg;
+         fore.r = fore.r / 2;
+         fore.g = fore.g / 2;
+         fore.b = fore.b / 2;
+         display_array[y][x].fg = fore;
+         Color back = display_array[y][x].bg;
+         back.r = back.r / 2;
+         back.g = back.g / 2;
+         back.b = back.b / 2;
+         display_array[y][x].bg = back;
+      }
+   }
+   return 0;
+}
+
 void drawDisplay()
 {
    sf::Text c;
