@@ -29,24 +29,6 @@ void Unit::drawUnit( int x, int y ) {
    writeChar( display_char, sf::Color::White, sf::Color::Black, x, y );
 }
 
-RandomRobo::RandomRobo() {
-   display_char = '!';
-   chassis = NULL;
-   inventory = NULL;
-   pos_x = 0;
-   pos_y = 0;
-   move_speed = 1000;
-   vision_range = 5;
-}
-
-RandomRobo::~RandomRobo() { }
-
-int RandomRobo::takeTurn() {
-   int x = rand() % 8;
-   moveUnit( this, (Direction) x );
-   return move_speed;
-}
-
 AI::AI() {
    display_char = 'z';
    chassis = NULL;
@@ -55,14 +37,21 @@ AI::AI() {
    pos_y = 0;
    move_speed = 1000;
    vision_range = 5;
+
+   behavior = WANDER;
+   onmyteam = false;
+   aggro = 0;
 }
 
 AI::~AI() { }
 
 int AI::takeTurn() {
-   // TODO...
+   if (behavior == WANDER) {
+      int x = rand() % 8;
+      moveUnit( this, (Direction) x );
+   }
 
-   return 100;
+   return 1000;
 };
 
 Player::Player() {
@@ -72,7 +61,7 @@ Player::Player() {
    pos_x = 0;
    pos_y = 0;
    move_speed = 700;
-   vision_range = 5;
+   vision_range = 8;
 }
 
 Player::~Player() { }

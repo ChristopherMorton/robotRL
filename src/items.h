@@ -1,14 +1,16 @@
 #ifndef ITEMS_H__
 #define ITEMS_H__
 
+#include <string>
+
+struct Unit;
+
 enum ItemType {
    // Equipment
    CHASSIS,
    ARM,
-   LEGS,
    MOUNTED,
    SYSTEM,
-   BATTERY,
    // Usable
    MISSILE,
    GRENADE,
@@ -19,42 +21,128 @@ enum ItemType {
    REMAINS
 };
 
-struct Item {
-   ItemType type;
-   unsigned int display_char;
-   
-   Item *next;
-
-   Item (unsigned int d_c);
-
-   void drawItem( int x, int y );
+enum WeaponType {
+   MELEE_WEAPON,
+   RANGED_WEAPON,
+   TACTICAL_WEAPON,
+   USABLE_WEAPON,
+   NOT_A_WEAPON
 };
 
+struct Item {
+   ItemType type;
+   WeaponType weapon_type;
+   unsigned int display_char;
+
+   int durability, max_durability;
+   
+   Item *next, *alt_next;
+
+   void drawItem( int x, int y );
+
+   virtual std::string getName() = 0;
+};
+
+struct MeleeWeapon
+{
+   virtual int meleeAttack( Unit *target ) = 0;
+};
+
+struct RangedWeapon
+{
+   virtual int rangedAttack( Unit *target ) = 0;
+};
+
+// Chasses
+
 enum ChassisType {
-   BASIC, // 2 arm 2 leg
-   QUAD, // 4 arm 2 leg
-   DOME, // 2 arm 0 legs - e.g. Dalek
-   CRITTER, // 0 arms 0 legs - small and fast e.g. mouse bot
-   HEAVY // 2 arm 2 leg many mounts - large and slow
+   BASIC, // 2 arm
+   QUAD, // 4 arm
+   DOME, // 2 arm rolly thing - e.g. Dalek
+   CRITTER, // 0 arms - small and fast e.g. mouse bot
+   HEAVY, // 4 arm many mounts - large and slow
+   ORB // 2 arms - levitating mount platform
 };
 
 struct Chassis : public Item
 {
+   int num_arms, num_mounts, num_systems;
+   Item *arms, *mounts, *systems;
+
    ChassisType c_type;
 
-   int num_arms;
-   Item *arms;
+   virtual std::string getName() = 0;
+   virtual void drawEquipScreen( int selection ) = 0;
 
-   int num_legs;
-   Item *legs;
+   Item* removeAll();
 
-   int num_mounts;
-   Item *mounts;
+   Item* getAllItems();
+   Item* getAllMelee();
+   Item* getAllRanged();
+   Item* getAllTactical();
+   Item* getAllNonWeapon();
 
-   int num_systems;
-   Item *systems;
+   int addArm( Item* arm );
+   int addMount( Item* mount );
+   int addSystem( Item* system );
+   Item* removeArm( int number );
+   Item* removeMount( int number );
+   Item* removeSystem( int number );
+   Item* removeAny( int number );
 
-   Item *battery;
+   void listEquipment( int selection );
+   int getTotalSlots();
+};
+
+struct BasicChassis : public Chassis
+{
+   BasicChassis();
+   virtual void drawEquipScreen( int selection );
+   virtual std::string getName();
+};
+
+struct QuadChassis : public Chassis
+{
+   QuadChassis();
+   virtual void drawEquipScreen( int selection );
+   virtual std::string getName();
+};
+
+struct DomeChassis : public Chassis
+{
+   DomeChassis();
+   virtual void drawEquipScreen( int selection );
+   virtual std::string getName();
+};
+
+struct CritterChassis : public Chassis
+{
+   CritterChassis();
+   virtual void drawEquipScreen( int selection );
+   virtual std::string getName();
+};
+
+struct HeavyChassis : public Chassis
+{
+   HeavyChassis();
+   virtual void drawEquipScreen( int selection );
+   virtual std::string getName();
+};
+
+struct OrbChassis : public Chassis
+{
+   OrbChassis();
+   virtual void drawEquipScreen( int selection );
+   virtual std::string getName();
+};
+
+// Arms
+
+struct ClawArm : public Item, public MeleeWeapon
+{
+   ClawArm();
+   virtual int meleeAttack( Unit *target );
+   virtual std::string getName();
 };
 
 #endif

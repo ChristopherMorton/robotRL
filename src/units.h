@@ -24,16 +24,20 @@ struct Unit
    virtual int takeTurn() = 0;
 };
 
-struct RandomRobo : public Unit
-{
-   RandomRobo();
-   virtual ~RandomRobo();
-
-   virtual int takeTurn();
+enum AIBehavior {
+   IDLE,
+   WANDER,
+   PATROL,
+   ATTACK_ENEMIES,
+   RUN_FROM_ENEMIES
 };
 
 struct AI : public Unit
 {
+   AIBehavior behavior;
+   bool onmyteam;
+   int aggro;
+
    AI();
    virtual ~AI();
 

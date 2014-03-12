@@ -33,10 +33,13 @@ enum GameState
    TEXT_PAUSE,
    INVENTORY_SCREEN,
    EQUIP_SCREEN,
+   EQUIP_INVENTORY,
    HELP_SCREEN
 };
 
 GameState game_state;
+
+int selection, max_selection; // Used in menus
 
 unsigned long int ticks; // 'ticks' since game started
 
@@ -240,11 +243,43 @@ void doFOV()
 //////////////////////////////////////////////////////////////////////
 // Player control
 //////////////////////////////////////////////////////////////////////
+  
+int addToInventory( Item *to_add )
+{
+   if (to_add == NULL) return -1;
 
-
+   // Simple implementation
+   to_add->next = player->inventory;
+   player->inventory = to_add;
+   return 0;
+}
 
 //////////////////////////////////////////////////////////////////////
-// Game Generation/Loading
+// Level Gen
+//////////////////////////////////////////////////////////////////////
+
+enum LevelStyle {
+   FACTORY_LEVEL,
+   MINE_LEVEL,
+   MILITARY_LEVEL
+};
+
+Level *generateRandomLevel( LevelStyle style, int difficulty, int x_dim, int y_dim, int up_stairs, int down_stairs, Level *preceding, bool entering_from_above )
+{
+   Level *newLevel = new Level( x_dim, y_dim );
+
+   if (style == FACTORY_LEVEL) {
+      int size = x_dim * y_dim;
+
+
+
+   }
+
+   return newLevel;
+}
+
+//////////////////////////////////////////////////////////////////////
+// Game Creation/Loading
 //////////////////////////////////////////////////////////////////////
 
 void newGame()
@@ -263,17 +298,27 @@ void testLevel()
 
    map_view_base = sf::Vector2u( 10, 10 );
 
-   for (int i = 30; i <= 40; ++i) {
+   for (int i = 20; i <= 30; ++i) {
+      tl->map[18][i].ter = IMPASSABLE_WALL;
+      tl->map[20][i].ter = IMPASSABLE_WALL;
+      tl->map[i][20].ter = IMPASSABLE_WALL;
       tl->map[30][i].ter = IMPASSABLE_WALL;
+      tl->map[i][30].ter = IMPASSABLE_WALL;
    }
+   tl->map[20][26].ter = FLOOR;
+
    blankVision();
 
    player = new Player();
    putUnit( player, 25, 25 );
    current_unit = player;
 
-   Unit* rr = new RandomRobo();
-   putUnit( rr, 30, 20 );
+   player->chassis = new BasicChassis();
+   player->chassis->addArm( new ClawArm() );
+   player->chassis->addArm( new ClawArm() );
+
+   Unit* rr = new AI();
+   putUnit( rr, 27, 28 );
    addUnitToQueue( rr, 500 );
 
    game_state = ON_MAP;
@@ -284,8 +329,6 @@ void testLevel()
 //////////////////////////////////////////////////////////////////////
 
 std::stack<sf::Keyboard::Key> input_stack;
-
-
 
 int sendKeyToGame( sf::Keyboard::Key k )
 {
@@ -308,25 +351,51 @@ int sendKeyToGame( sf::Keyboard::Key k )
 
    }
 
+   if (game_state == EQUIP_SCREEN) {
+      if (k == sf::Keyboard::E || k == sf::Keyboard::Escape || k == sf::Keyboard::BackSpace) {
+         game_state = ON_MAP; } else 
+      if (k == sf::Keyboard::Numpad2 || k == sf::Keyboard::Down) {
+         if (++selection == max_selection) selection = 0; } else
+      if (k == sf::Keyboard::Numpad8 || k == sf::Keyboard::Up) {
+         if (--selection == -1) selection = max_selection - 1; } else
+      if (k == sf::Keyboard::Space || k == sf::Keyboard::Return) {
+         Item *retval = player->chassis->removeAny( selection );
+         if (retval == NULL) // Selected <empty>
+            game_state = EQUIP_INVENTORY;
+         else
+            addToInventory( retval );
+      }
+
+      return 0;
+   }
+
    if (game_state == ON_MAP) {
       int speed = 0;
 
+      if (k == sf::Keyboard::E) {
+         game_state = EQUIP_SCREEN;
+         selection = 0;
+         max_selection = player->chassis->getTotalSlots();
+         return 0;
+      }
+
       // Movement
-      if(k==sf::Keyboard::Numpad1){moveUnit(player,SOUTHWEST);speed=player->move_speed;}
-      else
-      if(k==sf::Keyboard::Numpad2){moveUnit(player,SOUTH);speed=player->move_speed;}
-      else
-      if(k==sf::Keyboard::Numpad3){moveUnit(player,SOUTHEAST);speed=player->move_speed;}
-      else
-      if(k==sf::Keyboard::Numpad4){moveUnit(player,WEST);speed=player->move_speed;}
-      else
-      if(k==sf::Keyboard::Numpad6){moveUnit(player,EAST);speed=player->move_speed;}
-      else
-      if(k==sf::Keyboard::Numpad7){moveUnit(player,NORTHWEST);speed=player->move_speed;}
-      else
-      if(k==sf::Keyboard::Numpad8){moveUnit(player,NORTH);speed=player->move_speed;}
-      else
-      if(k==sf::Keyboard::Numpad9){moveUnit(player,NORTHEAST);speed=player->move_speed;}
+      if (k == sf::Keyboard::Numpad1){
+         moveUnit(player,SOUTHWEST);speed=player->move_speed;} else
+      if (k == sf::Keyboard::Numpad2){
+         moveUnit(player,SOUTH);speed=player->move_speed;} else
+      if (k == sf::Keyboard::Numpad3){
+         moveUnit(player,SOUTHEAST);speed=player->move_speed;} else
+      if (k == sf::Keyboard::Numpad4){
+         moveUnit(player,WEST);speed=player->move_speed;} else
+      if (k == sf::Keyboard::Numpad6){
+         moveUnit(player,EAST);speed=player->move_speed;} else
+      if (k == sf::Keyboard::Numpad7){
+         moveUnit(player,NORTHWEST);speed=player->move_speed;} else
+      if (k == sf::Keyboard::Numpad8){
+         moveUnit(player,NORTH);speed=player->move_speed;} else
+      if (k == sf::Keyboard::Numpad9){
+         moveUnit(player,NORTHEAST);speed=player->move_speed;}
 
       addUnitToQueue( player, speed );
       clearCurrentUnit();
@@ -365,49 +434,78 @@ int playGame()
    return 0;
 }
 
+void drawSidebar()
+{
+   int y;
+   for (y = 1; y < 27; ++y) {
+      writeChar( '|', sf::Color::White, sf::Color::Black, 60, y );
+      writeChar( '|', sf::Color::White, sf::Color::Black, 79, y );
+   }
+   writeString( "+------------------+", sf::Color::White, sf::Color::Black, 60, 0 );
+   writeString( "System Log", sf::Color::White, sf::Color::Black, 61, 1 );
+   writeString( "+------------------+", sf::Color::White, sf::Color::Black, 60, 2 );
+   writeString( "+------------------+", sf::Color::White, sf::Color::Black, 60, 27 );
+}
+   
+void drawBottomBar()
+{
+   std::stringstream tick_string;
+   tick_string << "Ticks: " << ticks;
+   writeString( tick_string.str(), sf::Color::White, sf::Color::Black, 5, 29 );
+}
+
 int displayGame()
 {
    if (current_level == NULL) return -1;
 
-   doFOV();
+   if (game_state == EQUIP_SCREEN) {
+      Chassis *ch = player->chassis;
+      if (ch) {
+         ch->drawEquipScreen( selection );
+      }
+   }
+   else
+   {
 
-   for (int x = 0; x < 80; x++) {
-      for (int y = 0; y < 28; y++) {
+      doFOV();
 
-         int map_x = x + map_view_base.x, map_y = y + map_view_base.y;
-         if (map_x < 0 || map_x >= current_level->x_dim ||
-               map_y < 0 || map_y >= current_level->y_dim)
-            continue;
+      for (int x = 0; x < 60; x++) {
+         for (int y = 0; y < 28; y++) {
 
-         int visibility = current_level->vision_map[map_y][map_x];
-         if (visibility == 0)
-            continue;
+            int map_x = x + map_view_base.x, map_y = y + map_view_base.y;
+            if (map_x < 0 || map_x >= current_level->x_dim ||
+                  map_y < 0 || map_y >= current_level->y_dim)
+               continue;
 
-         Location l = current_level->map[map_y][map_x];
+            int visibility = current_level->vision_map[map_y][map_x];
+            if (visibility == 0)
+               continue;
 
-         if (l.unit != NULL && visibility & MAP_VISIBLE) {
-            l.unit->drawUnit(x, y);
-         } else if (l.items != NULL) {
-            l.items->drawItem(x, y);
-         } else {
-            if (l.ter == FLOOR)
-               writeChar( '.', sf::Color::White, sf::Color::Black, x, y );
-            else if (l.ter == IMPASSABLE_WALL)
-               writeChar( ' ', sf::Color::Black, sf::Color::White, x, y );
-            else if (l.ter >= STAIRS_UP_1 && l.ter <= STAIRS_UP_4)
-               writeChar( '<', sf::Color::White, sf::Color::Black, x, y );
-            else if (l.ter >= STAIRS_DOWN_1 && l.ter <= STAIRS_DOWN_4)
-               writeChar( '>', sf::Color::White, sf::Color::Black, x, y );
+            Location l = current_level->map[map_y][map_x];
+
+            if (l.unit != NULL && visibility & MAP_VISIBLE) {
+               l.unit->drawUnit(x, y);
+            } else if (l.items != NULL) {
+               l.items->drawItem(x, y);
+            } else {
+               if (l.ter == FLOOR)
+                  writeChar( '.', sf::Color::White, sf::Color::Black, x, y );
+               else if (l.ter == IMPASSABLE_WALL)
+                  writeChar( ' ', sf::Color::Black, sf::Color::White, x, y );
+               else if (l.ter >= STAIRS_UP_1 && l.ter <= STAIRS_UP_4)
+                  writeChar( '<', sf::Color::White, sf::Color::Black, x, y );
+               else if (l.ter >= STAIRS_DOWN_1 && l.ter <= STAIRS_DOWN_4)
+                  writeChar( '>', sf::Color::White, sf::Color::Black, x, y );
+            }
+
+            if (visibility & MAP_SEEN && !(visibility & MAP_VISIBLE))
+               dim( x, y, x, y );
          }
-
-         if (visibility & MAP_SEEN && !(visibility & MAP_VISIBLE))
-            dim( x, y, x, y );
       }
    }
 
-   std::stringstream tick_string;
-   tick_string << "Ticks: " << ticks;
-   writeString( tick_string.str(), sf::Color::White, sf::Color::Black, 5, 29 );
+   drawSidebar();
+   drawBottomBar();
 
    drawDisplay();
 
