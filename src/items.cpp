@@ -2,8 +2,41 @@
 #include "display.h"
 #include "log.h"
 
+#include <sstream>
+
+using namespace sf;
+
 void Item::drawItem( int x, int y ) {
-   writeChar( display_char, sf::Color::White, sf::Color::Black, x, y );
+   writeChar( display_char, Color::White, Color::Black, x, y );
+}
+
+/* Generic Items have only one action:
+ * 0 - Drop
+ */
+
+int Item::drawActions()
+{
+   const int column = 33, header_column = 31, column_end = 57;
+   int row = 12;
+
+   num_actions = 1;
+
+   writeString( "Actions:", Color::White, Color::Black, header_column, row );
+   row++;
+   writeString( "a) Drop", Color::White, Color::Black, column, row );
+   colorInvert( column, row, column_end, row );
+
+   return num_actions;
+}
+
+int Item::doAction( int selection )
+{
+   return 0;
+}
+
+void Item::drawDescription()
+{
+   writeString( getName(), Color::White, Color::Black, 32, 2 );
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -468,20 +501,20 @@ int Chassis::getTotalSlots()
 
 void Chassis::listEquipment( int selection )
 {
-   const int column = 32, header_column = 30, column_end = 57;
+   const int column = 33, header_column = 31, column_end = 57;
    int row = 1, count = 0;
    Item *to_write;
 
    to_write = arms;
-   writeString( "ARM SLOTS:", sf::Color::White, sf::Color::Black, header_column, row );
+   writeString( "ARM SLOTS:", Color::White, Color::Black, header_column, row );
    ++row;
    for (int i = 0; i < num_arms; ++i) {
       if (to_write != NULL) {
-         writeString( to_write->getName(), sf::Color::White, sf::Color::Black, column, row );
+         writeString( to_write->getName(), Color::White, Color::Black, column, row );
          to_write = to_write->next;
       }
       else {
-         writeString( "<empty>", sf::Color::White, sf::Color::Black, column, row );
+         writeString( "<empty>", Color::White, Color::Black, column, row );
       }
 
       if (count == selection)
@@ -492,15 +525,15 @@ void Chassis::listEquipment( int selection )
    }
 
    to_write = mounts;
-   writeString( "MOUNT SLOTS:", sf::Color::White, sf::Color::Black, header_column, row );
+   writeString( "MOUNT SLOTS:", Color::White, Color::Black, header_column, row );
    ++row;
    for (int i = 0; i < num_mounts; ++i) {
       if (to_write != NULL) {
-         writeString( to_write->getName(), sf::Color::White, sf::Color::Black, column, row );
+         writeString( to_write->getName(), Color::White, Color::Black, column, row );
          to_write = to_write->next;
       }
       else
-         writeString( "<empty>", sf::Color::White, sf::Color::Black, column, row );
+         writeString( "<empty>", Color::White, Color::Black, column, row );
 
       if (count == selection)
          colorInvert( column, row, column_end, row );
@@ -510,15 +543,15 @@ void Chassis::listEquipment( int selection )
    }
       
    to_write = systems;
-   writeString( "SYSTEM SLOTS:", sf::Color::White, sf::Color::Black, header_column, row );
+   writeString( "SYSTEM SLOTS:", Color::White, Color::Black, header_column, row );
    ++row;
    for (int i = 0; i < num_systems; ++i) {
       if (to_write != NULL) {
-         writeString( to_write->getName(), sf::Color::White, sf::Color::Black, column, row );
+         writeString( to_write->getName(), Color::White, Color::Black, column, row );
          to_write = to_write->next;
       }
       else
-         writeString( "<empty>", sf::Color::White, sf::Color::Black, column, row );
+         writeString( "<empty>", Color::White, Color::Black, column, row );
 
       if (count == selection)
          colorInvert( column, row, column_end, row );
@@ -526,6 +559,14 @@ void Chassis::listEquipment( int selection )
       ++count;
       ++row;
    }
+}
+
+void Chassis::drawChassisStats( int row )
+{
+   std::stringstream dur_str;
+   dur_str << "Durability:  " << durability << "/" << max_durability;
+
+   writeString( dur_str.str(), Color::White, Color::Black, 34, row );
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -548,38 +589,51 @@ BasicChassis::BasicChassis()
    num_arms = 2;
    num_mounts = 1;
    num_systems = 3;
+
+   durability = max_durability = 100;
 }
 
 std::string BasicChassis::getName() {
    return "Basic Chassis";
 }
 
+void BasicChassis::drawDescription()
+{
+   writeString( getName(), Color::White, Color::Black, 32, 2 );
+   writeString( "A typical robotic frame,", Color::White, Color::Black, 32, 4);
+   writeString( "with plug-and-play ports", Color::White, Color::Black, 32, 5);
+   writeString( "for arms, system mods and", Color::White, Color::Black, 32, 6);
+   writeString( "one heavy mount.", Color::White, Color::Black, 32, 7);
+
+   drawChassisStats( 9 );
+}
+
 void BasicChassis::drawEquipScreen( int selection )
 {
-   writeString("        Basic Chassis", sf::Color::White, sf::Color::Black, 0, 2);
-   writeString("          ----------", sf::Color::White, sf::Color::Black, 0, 4);
-   writeString("         |          |", sf::Color::White, sf::Color::Black, 0, 5);
-   writeString("         |  /\\  /\\  |", sf::Color::White, sf::Color::Black, 0, 6);
-   writeString("         |  \\/  \\/  |", sf::Color::White, sf::Color::Black, 0, 7);
-   writeString("         |          |", sf::Color::White, sf::Color::Black, 0, 8);
-   writeString("         |    ==    |  ++", sf::Color::White, sf::Color::Black, 0, 9);
-   writeString("          ----------   ++", sf::Color::White, sf::Color::Black, 0, 10);
-   writeString("              ||      //", sf::Color::White, sf::Color::Black, 0, 11);
-   writeString("      ------------------", sf::Color::White, sf::Color::Black, 0, 12);
-   writeString("      /                \\", sf::Color::White, sf::Color::Black, 0, 13);
-   writeString("     /  / \\        / \\  \\", sf::Color::White, sf::Color::Black, 0, 14);
-   writeString("    /  /   \\      /   \\  \\", sf::Color::White, sf::Color::Black, 0, 15);
-   writeString("    | |     \\    /     | |", sf::Color::White, sf::Color::Black, 0, 16);
-   writeString("    | |      \\--/      | |", sf::Color::White, sf::Color::Black, 0, 17);
-   writeString("    +++       ||       +++", sf::Color::White, sf::Color::Black, 0, 18);
-   writeString("            ------", sf::Color::White, sf::Color::Black, 0, 19);
-   writeString("           |      |", sf::Color::White, sf::Color::Black, 0, 20);
-   writeString("          / ------ \\", sf::Color::White, sf::Color::Black, 0, 21);
-   writeString("         //        \\\\", sf::Color::White, sf::Color::Black, 0, 22);
-   writeString("         ||        ||", sf::Color::White, sf::Color::Black, 0, 23);
-   writeString("         ||        ||", sf::Color::White, sf::Color::Black, 0, 24);
-   writeString("         ||        ||", sf::Color::White, sf::Color::Black, 0, 25);
-   writeString("       ----        ----", sf::Color::White, sf::Color::Black, 0, 26);
+   writeString("        Basic Chassis", Color::White, Color::Black, 0, 2);
+   writeString("          ----------", Color::White, Color::Black, 0, 4);
+   writeString("         |          |", Color::White, Color::Black, 0, 5);
+   writeString("         |  /\\  /\\  |", Color::White, Color::Black, 0, 6);
+   writeString("         |  \\/  \\/  |", Color::White, Color::Black, 0, 7);
+   writeString("         |          |", Color::White, Color::Black, 0, 8);
+   writeString("         |    ==    |  ++", Color::White, Color::Black, 0, 9);
+   writeString("          ----------   ++", Color::White, Color::Black, 0, 10);
+   writeString("              ||      //", Color::White, Color::Black, 0, 11);
+   writeString("      ------------------", Color::White, Color::Black, 0, 12);
+   writeString("      /                \\", Color::White, Color::Black, 0, 13);
+   writeString("     /  / \\        / \\  \\", Color::White, Color::Black, 0, 14);
+   writeString("    /  /   \\      /   \\  \\", Color::White, Color::Black, 0, 15);
+   writeString("    | |     \\    /     | |", Color::White, Color::Black, 0, 16);
+   writeString("    | |      \\--/      | |", Color::White, Color::Black, 0, 17);
+   writeString("    +++       ||       +++", Color::White, Color::Black, 0, 18);
+   writeString("            ------", Color::White, Color::Black, 0, 19);
+   writeString("           |      |", Color::White, Color::Black, 0, 20);
+   writeString("          / ------ \\", Color::White, Color::Black, 0, 21);
+   writeString("         //        \\\\", Color::White, Color::Black, 0, 22);
+   writeString("         ||        ||", Color::White, Color::Black, 0, 23);
+   writeString("         ||        ||", Color::White, Color::Black, 0, 24);
+   writeString("         ||        ||", Color::White, Color::Black, 0, 25);
+   writeString("       ----        ----", Color::White, Color::Black, 0, 26);
 
    listEquipment( selection );
 }
@@ -599,40 +653,52 @@ QuadChassis::QuadChassis()
    num_arms = 4;
    num_mounts = 1;
    num_systems = 3;
+
+   durability = max_durability = 120;
 }
 
 std::string QuadChassis::getName() {
    return "Quad Chassis";
 }
 
+void QuadChassis::drawDescription()
+{
+   writeString( getName(), Color::White, Color::Black, 32, 2 );
+   writeString( "A four-armed extension of the basic", Color::White, Color::Black, 32, 4);
+   writeString( "frame, used for heavy lifting,", Color::White, Color::Black, 32, 5);
+   writeString( "mining, and melee combat.", Color::White, Color::Black, 32, 6);
+
+   drawChassisStats( 8 );
+}
+
 void QuadChassis::drawEquipScreen( int selection )
 {
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 2);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 3);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 4);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 5);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 6);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 7);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 8);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 9);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 10);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 11);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 12);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 13);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 14);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 15);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 16);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 17);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 18);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 19);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 20);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 21);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 22);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 23);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 24);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 25);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 26);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 27);
+   writeString("                              ", Color::White, Color::Black, 0, 2);
+   writeString("                              ", Color::White, Color::Black, 0, 3);
+   writeString("                              ", Color::White, Color::Black, 0, 4);
+   writeString("                              ", Color::White, Color::Black, 0, 5);
+   writeString("                              ", Color::White, Color::Black, 0, 6);
+   writeString("                              ", Color::White, Color::Black, 0, 7);
+   writeString("                              ", Color::White, Color::Black, 0, 8);
+   writeString("                              ", Color::White, Color::Black, 0, 9);
+   writeString("                              ", Color::White, Color::Black, 0, 10);
+   writeString("                              ", Color::White, Color::Black, 0, 11);
+   writeString("                              ", Color::White, Color::Black, 0, 12);
+   writeString("                              ", Color::White, Color::Black, 0, 13);
+   writeString("                              ", Color::White, Color::Black, 0, 14);
+   writeString("                              ", Color::White, Color::Black, 0, 15);
+   writeString("                              ", Color::White, Color::Black, 0, 16);
+   writeString("                              ", Color::White, Color::Black, 0, 17);
+   writeString("                              ", Color::White, Color::Black, 0, 18);
+   writeString("                              ", Color::White, Color::Black, 0, 19);
+   writeString("                              ", Color::White, Color::Black, 0, 20);
+   writeString("                              ", Color::White, Color::Black, 0, 21);
+   writeString("                              ", Color::White, Color::Black, 0, 22);
+   writeString("                              ", Color::White, Color::Black, 0, 23);
+   writeString("                              ", Color::White, Color::Black, 0, 24);
+   writeString("                              ", Color::White, Color::Black, 0, 25);
+   writeString("                              ", Color::White, Color::Black, 0, 26);
+   writeString("                              ", Color::White, Color::Black, 0, 27);
 
    listEquipment( selection );
 
@@ -651,42 +717,54 @@ DomeChassis::DomeChassis()
    systems = NULL;
 
    num_arms = 2;
-   num_mounts = 3;
-   num_systems = 4;
+   num_mounts = 2;
+   num_systems = 6;
+
+   durability = max_durability = 300;
 }
 
 std::string DomeChassis::getName() {
    return "Dome Chassis";
 }
 
+void DomeChassis::drawDescription()
+{
+   writeString( getName(), Color::White, Color::Black, 32, 2 );
+   writeString( "A rolling frame designed for", Color::White, Color::Black, 32, 4);
+   writeString( "high-level computing and command.", Color::White, Color::Black, 32, 5);
+   writeString( "Tough and efficient.", Color::White, Color::Black, 32, 6);
+
+   drawChassisStats( 8 );
+} 
+
 void DomeChassis::drawEquipScreen( int selection )
 {
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 2);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 3);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 4);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 5);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 6);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 7);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 8);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 9);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 10);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 11);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 12);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 13);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 14);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 15);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 16);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 17);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 18);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 19);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 20);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 21);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 22);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 23);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 24);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 25);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 26);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 27);
+   writeString("                              ", Color::White, Color::Black, 0, 2);
+   writeString("                              ", Color::White, Color::Black, 0, 3);
+   writeString("                              ", Color::White, Color::Black, 0, 4);
+   writeString("                              ", Color::White, Color::Black, 0, 5);
+   writeString("                              ", Color::White, Color::Black, 0, 6);
+   writeString("                              ", Color::White, Color::Black, 0, 7);
+   writeString("                              ", Color::White, Color::Black, 0, 8);
+   writeString("                              ", Color::White, Color::Black, 0, 9);
+   writeString("                              ", Color::White, Color::Black, 0, 10);
+   writeString("                              ", Color::White, Color::Black, 0, 11);
+   writeString("                              ", Color::White, Color::Black, 0, 12);
+   writeString("                              ", Color::White, Color::Black, 0, 13);
+   writeString("                              ", Color::White, Color::Black, 0, 14);
+   writeString("                              ", Color::White, Color::Black, 0, 15);
+   writeString("                              ", Color::White, Color::Black, 0, 16);
+   writeString("                              ", Color::White, Color::Black, 0, 17);
+   writeString("                              ", Color::White, Color::Black, 0, 18);
+   writeString("                              ", Color::White, Color::Black, 0, 19);
+   writeString("                              ", Color::White, Color::Black, 0, 20);
+   writeString("                              ", Color::White, Color::Black, 0, 21);
+   writeString("                              ", Color::White, Color::Black, 0, 22);
+   writeString("                              ", Color::White, Color::Black, 0, 23);
+   writeString("                              ", Color::White, Color::Black, 0, 24);
+   writeString("                              ", Color::White, Color::Black, 0, 25);
+   writeString("                              ", Color::White, Color::Black, 0, 26);
+   writeString("                              ", Color::White, Color::Black, 0, 27);
 
    listEquipment( selection );
 
@@ -707,40 +785,51 @@ CritterChassis::CritterChassis()
    num_arms = 0;
    num_mounts = 2;
    num_systems = 3;
+
+   durability = max_durability = 180;
 }
 
 std::string CritterChassis::getName() {
    return "Critter Chassis";
 }
 
+void CritterChassis::drawDescription()
+{
+   writeString( getName(), Color::White, Color::Black, 32, 2 );
+   writeString( "A compact frame designed for", Color::White, Color::Black, 32, 4);
+   writeString( "mobility and unobtrusiveness.", Color::White, Color::Black, 32, 5);
+
+   drawChassisStats( 7 );
+} 
+
 void CritterChassis::drawEquipScreen( int selection )
 {
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 2);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 3);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 4);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 5);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 6);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 7);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 8);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 9);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 10);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 11);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 12);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 13);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 14);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 15);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 16);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 17);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 18);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 19);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 20);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 21);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 22);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 23);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 24);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 25);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 26);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 27);
+   writeString("                              ", Color::White, Color::Black, 0, 2);
+   writeString("                              ", Color::White, Color::Black, 0, 3);
+   writeString("                              ", Color::White, Color::Black, 0, 4);
+   writeString("                              ", Color::White, Color::Black, 0, 5);
+   writeString("                              ", Color::White, Color::Black, 0, 6);
+   writeString("                              ", Color::White, Color::Black, 0, 7);
+   writeString("                              ", Color::White, Color::Black, 0, 8);
+   writeString("                              ", Color::White, Color::Black, 0, 9);
+   writeString("                              ", Color::White, Color::Black, 0, 10);
+   writeString("                              ", Color::White, Color::Black, 0, 11);
+   writeString("                              ", Color::White, Color::Black, 0, 12);
+   writeString("                              ", Color::White, Color::Black, 0, 13);
+   writeString("                              ", Color::White, Color::Black, 0, 14);
+   writeString("                              ", Color::White, Color::Black, 0, 15);
+   writeString("                              ", Color::White, Color::Black, 0, 16);
+   writeString("                              ", Color::White, Color::Black, 0, 17);
+   writeString("                              ", Color::White, Color::Black, 0, 18);
+   writeString("                              ", Color::White, Color::Black, 0, 19);
+   writeString("                              ", Color::White, Color::Black, 0, 20);
+   writeString("                              ", Color::White, Color::Black, 0, 21);
+   writeString("                              ", Color::White, Color::Black, 0, 22);
+   writeString("                              ", Color::White, Color::Black, 0, 23);
+   writeString("                              ", Color::White, Color::Black, 0, 24);
+   writeString("                              ", Color::White, Color::Black, 0, 25);
+   writeString("                              ", Color::White, Color::Black, 0, 26);
+   writeString("                              ", Color::White, Color::Black, 0, 27);
 
    listEquipment( selection );
 
@@ -761,40 +850,53 @@ HeavyChassis::HeavyChassis()
    num_arms = 4;
    num_mounts = 6;
    num_systems = 4;
+
+   durability = max_durability = 700;
 }
 
 std::string HeavyChassis::getName() {
    return "Heavy Chassis";
 }
 
+void HeavyChassis::drawDescription()
+{
+   writeString( getName(), Color::White, Color::Black, 32, 2 );
+   writeString( "A massive bipedal frame with", Color::White, Color::Black, 32, 4);
+   writeString( "multiple heavy launchers", Color::White, Color::Black, 32, 5);
+   writeString( "protruding from its shoulders.", Color::White, Color::Black, 32, 6);
+   writeString( "Very powerful, but slow to move.", Color::White, Color::Black, 32, 7);
+
+   drawChassisStats( 9 );
+}
+
 void HeavyChassis::drawEquipScreen( int selection )
 {
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 2);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 3);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 4);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 5);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 6);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 7);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 8);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 9);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 10);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 11);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 12);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 13);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 14);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 15);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 16);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 17);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 18);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 19);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 20);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 21);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 22);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 23);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 24);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 25);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 26);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 27);
+   writeString("                              ", Color::White, Color::Black, 0, 2);
+   writeString("                              ", Color::White, Color::Black, 0, 3);
+   writeString("                              ", Color::White, Color::Black, 0, 4);
+   writeString("                              ", Color::White, Color::Black, 0, 5);
+   writeString("                              ", Color::White, Color::Black, 0, 6);
+   writeString("                              ", Color::White, Color::Black, 0, 7);
+   writeString("                              ", Color::White, Color::Black, 0, 8);
+   writeString("                              ", Color::White, Color::Black, 0, 9);
+   writeString("                              ", Color::White, Color::Black, 0, 10);
+   writeString("                              ", Color::White, Color::Black, 0, 11);
+   writeString("                              ", Color::White, Color::Black, 0, 12);
+   writeString("                              ", Color::White, Color::Black, 0, 13);
+   writeString("                              ", Color::White, Color::Black, 0, 14);
+   writeString("                              ", Color::White, Color::Black, 0, 15);
+   writeString("                              ", Color::White, Color::Black, 0, 16);
+   writeString("                              ", Color::White, Color::Black, 0, 17);
+   writeString("                              ", Color::White, Color::Black, 0, 18);
+   writeString("                              ", Color::White, Color::Black, 0, 19);
+   writeString("                              ", Color::White, Color::Black, 0, 20);
+   writeString("                              ", Color::White, Color::Black, 0, 21);
+   writeString("                              ", Color::White, Color::Black, 0, 22);
+   writeString("                              ", Color::White, Color::Black, 0, 23);
+   writeString("                              ", Color::White, Color::Black, 0, 24);
+   writeString("                              ", Color::White, Color::Black, 0, 25);
+   writeString("                              ", Color::White, Color::Black, 0, 26);
+   writeString("                              ", Color::White, Color::Black, 0, 27);
 
    listEquipment( selection );
 
@@ -815,40 +917,53 @@ OrbChassis::OrbChassis()
    num_arms = 2;
    num_mounts = 4;
    num_systems = 7;
+
+   durability = max_durability = 420;
 }
 
 std::string OrbChassis::getName() {
    return "Orb Chassis";
 }
 
+void OrbChassis::drawDescription()
+{
+   writeString( getName(), Color::White, Color::Black, 32, 2 );
+   writeString( "A levitating orb with dual", Color::White, Color::Black, 32, 4);
+   writeString( "arm sockets and several heavy", Color::White, Color::Black, 32, 5);
+   writeString( "mounts. Mobile and powerful,", Color::White, Color::Black, 32, 6);
+   writeString( "but with high energy costs.", Color::White, Color::Black, 32, 7);
+
+   drawChassisStats( 9 );
+}
+
 void OrbChassis::drawEquipScreen( int selection )
 {
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 2);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 3);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 4);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 5);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 6);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 7);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 8);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 9);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 10);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 11);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 12);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 13);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 14);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 15);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 16);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 17);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 18);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 19);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 20);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 21);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 22);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 23);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 24);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 25);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 26);
-   writeString("                              ", sf::Color::White, sf::Color::Black, 0, 27);
+   writeString("                              ", Color::White, Color::Black, 0, 2);
+   writeString("                              ", Color::White, Color::Black, 0, 3);
+   writeString("                              ", Color::White, Color::Black, 0, 4);
+   writeString("                              ", Color::White, Color::Black, 0, 5);
+   writeString("                              ", Color::White, Color::Black, 0, 6);
+   writeString("                              ", Color::White, Color::Black, 0, 7);
+   writeString("                              ", Color::White, Color::Black, 0, 8);
+   writeString("                              ", Color::White, Color::Black, 0, 9);
+   writeString("                              ", Color::White, Color::Black, 0, 10);
+   writeString("                              ", Color::White, Color::Black, 0, 11);
+   writeString("                              ", Color::White, Color::Black, 0, 12);
+   writeString("                              ", Color::White, Color::Black, 0, 13);
+   writeString("                              ", Color::White, Color::Black, 0, 14);
+   writeString("                              ", Color::White, Color::Black, 0, 15);
+   writeString("                              ", Color::White, Color::Black, 0, 16);
+   writeString("                              ", Color::White, Color::Black, 0, 17);
+   writeString("                              ", Color::White, Color::Black, 0, 18);
+   writeString("                              ", Color::White, Color::Black, 0, 19);
+   writeString("                              ", Color::White, Color::Black, 0, 20);
+   writeString("                              ", Color::White, Color::Black, 0, 21);
+   writeString("                              ", Color::White, Color::Black, 0, 22);
+   writeString("                              ", Color::White, Color::Black, 0, 23);
+   writeString("                              ", Color::White, Color::Black, 0, 24);
+   writeString("                              ", Color::White, Color::Black, 0, 25);
+   writeString("                              ", Color::White, Color::Black, 0, 26);
+   writeString("                              ", Color::White, Color::Black, 0, 27);
 
    listEquipment( selection );
 }
@@ -877,3 +992,10 @@ std::string ClawArm::getName()
 {
    return "Claw Arm Mark I";
 } 
+
+void ClawArm::drawDescription()
+{
+   writeString( getName(), Color::White, Color::Black, 32, 2 );
+   writeString( "A mechanical arm that ends", Color::White, Color::Black, 32, 4);
+   writeString( "in a gripping claw.", Color::White, Color::Black, 32, 5);
+}

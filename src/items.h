@@ -41,6 +41,12 @@ struct Item {
    void drawItem( int x, int y );
 
    virtual std::string getName() = 0;
+
+   virtual void drawDescription();
+
+   int num_actions;
+   virtual int drawActions();
+   virtual int doAction( int selection );
 };
 
 struct MeleeWeapon
@@ -71,6 +77,8 @@ struct Chassis : public Item
 
    ChassisType c_type;
 
+   int durability, max_durability;
+
    virtual std::string getName() = 0;
    virtual void drawEquipScreen( int selection ) = 0;
 
@@ -92,6 +100,8 @@ struct Chassis : public Item
 
    void listEquipment( int selection );
    int getTotalSlots();
+
+   void drawChassisStats( int row );
 };
 
 struct BasicChassis : public Chassis
@@ -99,6 +109,8 @@ struct BasicChassis : public Chassis
    BasicChassis();
    virtual void drawEquipScreen( int selection );
    virtual std::string getName();
+
+   virtual void drawDescription();
 };
 
 struct QuadChassis : public Chassis
@@ -106,6 +118,8 @@ struct QuadChassis : public Chassis
    QuadChassis();
    virtual void drawEquipScreen( int selection );
    virtual std::string getName();
+
+   virtual void drawDescription();
 };
 
 struct DomeChassis : public Chassis
@@ -113,6 +127,8 @@ struct DomeChassis : public Chassis
    DomeChassis();
    virtual void drawEquipScreen( int selection );
    virtual std::string getName();
+
+   virtual void drawDescription();
 };
 
 struct CritterChassis : public Chassis
@@ -120,6 +136,8 @@ struct CritterChassis : public Chassis
    CritterChassis();
    virtual void drawEquipScreen( int selection );
    virtual std::string getName();
+
+   virtual void drawDescription();
 };
 
 struct HeavyChassis : public Chassis
@@ -127,6 +145,8 @@ struct HeavyChassis : public Chassis
    HeavyChassis();
    virtual void drawEquipScreen( int selection );
    virtual std::string getName();
+
+   virtual void drawDescription();
 };
 
 struct OrbChassis : public Chassis
@@ -134,6 +154,8 @@ struct OrbChassis : public Chassis
    OrbChassis();
    virtual void drawEquipScreen( int selection );
    virtual std::string getName();
+
+   virtual void drawDescription();
 };
 
 // Arms
@@ -143,6 +165,8 @@ struct ClawArm : public Item, public MeleeWeapon
    ClawArm();
    virtual int meleeAttack( Unit *target );
    virtual std::string getName();
+
+   virtual void drawDescription();
 };
 
 #endif
