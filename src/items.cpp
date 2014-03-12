@@ -1,6 +1,7 @@
 #include "items.h"
 #include "display.h"
 #include "log.h"
+#include "game.h"
 
 #include <sstream>
 
@@ -24,13 +25,15 @@ int Item::drawActions()
    writeString( "Actions:", Color::White, Color::Black, header_column, row );
    row++;
    writeString( "a) Drop", Color::White, Color::Black, column, row );
-   colorInvert( column, row, column_end, row );
 
    return num_actions;
 }
 
 int Item::doAction( int selection )
 {
+   if (selection != 0) return -1;
+
+   dropFromInventory( this );
    return 0;
 }
 
@@ -590,6 +593,8 @@ BasicChassis::BasicChassis()
    num_mounts = 1;
    num_systems = 3;
 
+   num_actions = 1;
+
    durability = max_durability = 100;
 }
 
@@ -653,6 +658,8 @@ QuadChassis::QuadChassis()
    num_arms = 4;
    num_mounts = 1;
    num_systems = 3;
+
+   num_actions = 1;
 
    durability = max_durability = 120;
 }
@@ -720,6 +727,8 @@ DomeChassis::DomeChassis()
    num_mounts = 2;
    num_systems = 6;
 
+   num_actions = 1;
+
    durability = max_durability = 300;
 }
 
@@ -786,6 +795,8 @@ CritterChassis::CritterChassis()
    num_mounts = 2;
    num_systems = 3;
 
+   num_actions = 1;
+
    durability = max_durability = 180;
 }
 
@@ -850,6 +861,8 @@ HeavyChassis::HeavyChassis()
    num_arms = 4;
    num_mounts = 6;
    num_systems = 4;
+
+   num_actions = 1;
 
    durability = max_durability = 700;
 }
@@ -917,6 +930,8 @@ OrbChassis::OrbChassis()
    num_arms = 2;
    num_mounts = 4;
    num_systems = 7;
+
+   num_actions = 1;
 
    durability = max_durability = 420;
 }

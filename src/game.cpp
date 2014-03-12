@@ -4,10 +4,12 @@
 #include "structures.h"
 #include "items.h"
 #include "units.h"
+#include "log.h"
 
 #include <vector>
 #include <queue>
 #include <stack>
+#include <deque>
 #include <sstream>
 #include <cmath>
 
@@ -34,6 +36,7 @@ enum GameState
    TARGETTING,
    TEXT_PAUSE,
    INVENTORY_SCREEN,
+   INVENTORY_SELECT,
    EQUIP_SCREEN,
    EQUIP_INVENTORY,
    HELP_SCREEN
@@ -41,9 +44,29 @@ enum GameState
 
 GameState game_state;
 
-int selection, max_selection, menu_scroll; // Used in menus
+int selection, max_selection, menu_scroll, alt_selection, max_alt_selection; // Used in menus
 
 unsigned long int ticks; // 'ticks' since game started
+
+//////////////////////////////////////////////////////////////////////
+// System Log
+//////////////////////////////////////////////////////////////////////
+
+const int system_log_width = 18;
+const int system_log_memory = 100;
+std::deque<std::string> system_log;
+int system_log_scroll = 0;
+
+void writeSystemLog( std::string text )
+{
+   if (text.size() > system_log_width)
+      text.resize( system_log_width );
+   system_log.push_front( text );
+   system_log_scroll = 0;
+
+   if (system_log.size() > system_log_memory)
+      system_log.pop_back();
+}
 
 //////////////////////////////////////////////////////////////////////
 // Time
@@ -141,10 +164,7 @@ int moveUnit( Unit* unit, Direction dir )
       x_dest++;
    }
 
-   putUnit( unit, x_dest, y_dest );
-
-   return 0;
-
+   return putUnit( unit, x_dest, y_dest );
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -271,6 +291,35 @@ int addToInventory( Item *to_add )
    return 0;
 }
 
+int dropFromInventory( Item *i )
+{
+   Item *prev = player->inventory;
+
+   if (prev == NULL) return -1;
+
+   if (prev == i) {
+      player->inventory = prev->next;
+      Location &drop_point = current_level->map[player->pos_y][player->pos_x];
+      prev->next = drop_point.items;
+      drop_point.items = prev;
+      return 0;
+   }
+
+   while (prev != NULL) {
+      if (prev->next == i) {
+         prev->next = i->next; // removed
+         Location &drop_point = current_level->map[player->pos_y][player->pos_x];
+         i->next = drop_point.items;
+         drop_point.items = i;
+         return 0;
+      }
+      prev = prev->next;
+   }
+
+   log("Couldn't drop item, it was not in the inventory.");
+   return -2;
+}
+
 int invSelectionDown()
 {
    ++selection;
@@ -339,6 +388,10 @@ int drawInventory()
       if (count == selection) {
          colorInvert( column, row, column_end, row );
          i->drawDescription();
+         if (game_state == INVENTORY_SELECT) {
+            i->drawActions();
+            colorInvert( 33, 13+alt_selection, 57, 13+alt_selection );
+         }
       }
 
       row++;
@@ -346,6 +399,36 @@ int drawInventory()
       i = i->next;
    }
    return 0;
+}
+
+Item *invSelectedItem()
+{
+   Item *i = player->inventory;
+   int count = 0;
+   while (i != NULL) {
+      if (count == selection)
+         return i;
+
+      count++;
+      i = i->next;
+   }
+   return NULL;
+}
+
+// Interacting with the environment
+
+void examineLocation()
+{ 
+   Location &player_loc = current_level->map[player->pos_y][player->pos_x];
+
+   if (player_loc.items != NULL) {
+      Item *i = player_loc.items;
+      writeSystemLog( ">Items here:" );
+      while( i != NULL ) {
+         writeSystemLog( i->getName() );
+         i = i->next;
+      }
+   }
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -422,6 +505,8 @@ void testLevel()
    addUnitToQueue( rr, 500 );
 
    game_state = ON_MAP;
+
+   writeSystemLog("TEST");
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -461,7 +546,31 @@ int sendKeyToGame( Keyboard::Key k )
       if (k == Keyboard::PageDown) {
          invSelectionPageDown(); } else
       if (k == Keyboard::PageUp) {
-         invSelectionPageUp(); }
+         invSelectionPageUp(); } else
+      if (k == Keyboard::Space || k == Keyboard::Return) {
+         Item *selected = invSelectedItem();
+         game_state = INVENTORY_SELECT;
+         alt_selection = 0;
+         max_alt_selection = selected->num_actions;
+      }
+
+      return 0;
+   }
+
+   if (game_state == INVENTORY_SELECT) {
+      if (k == Keyboard::Escape || k == Keyboard::BackSpace) {
+         game_state = INVENTORY_SCREEN; } else
+      if (k == Keyboard::Numpad2 || k == Keyboard::Down) {
+         if (++alt_selection == max_alt_selection) alt_selection = 0; } else
+      if (k == Keyboard::Numpad8 || k == Keyboard::Up) {
+         if (--alt_selection == -1) alt_selection = max_alt_selection - 1; } else
+      if (k == Keyboard::Space || k == Keyboard::Return) {
+         // Do that Item action
+         Item *selected = invSelectedItem();
+         if(selected != NULL) selected->doAction( alt_selection );
+         game_state = ON_MAP;
+      }
+
 
       return 0;
    }
@@ -504,21 +613,53 @@ int sendKeyToGame( Keyboard::Key k )
 
       // Movement
       if (k == Keyboard::Numpad1){
-         moveUnit(player,SOUTHWEST);speed=player->move_speed;} else
+         int result = moveUnit(player,SOUTHWEST);
+         if (result == 0) {
+            speed=player->move_speed;
+            examineLocation();
+         } } else
       if (k == Keyboard::Numpad2){
-         moveUnit(player,SOUTH);speed=player->move_speed;} else
+         int result = moveUnit(player,SOUTH);
+         if (result == 0) {
+            speed=player->move_speed;
+            examineLocation();
+         } } else
       if (k == Keyboard::Numpad3){
-         moveUnit(player,SOUTHEAST);speed=player->move_speed;} else
+         int result = moveUnit(player,SOUTHEAST);
+         if (result == 0) {
+            speed=player->move_speed;
+            examineLocation();
+         } } else
       if (k == Keyboard::Numpad4){
-         moveUnit(player,WEST);speed=player->move_speed;} else
+         int result = moveUnit(player,WEST);
+         if (result == 0) {
+            speed=player->move_speed;
+            examineLocation();
+         } } else
       if (k == Keyboard::Numpad6){
-         moveUnit(player,EAST);speed=player->move_speed;} else
+         int result = moveUnit(player,EAST);
+         if (result == 0) {
+            speed=player->move_speed;
+            examineLocation();
+         } } else
       if (k == Keyboard::Numpad7){
-         moveUnit(player,NORTHWEST);speed=player->move_speed;} else
+         int result = moveUnit(player,NORTHWEST);
+         if (result == 0) {
+            speed=player->move_speed;
+            examineLocation();
+         } } else
       if (k == Keyboard::Numpad8){
-         moveUnit(player,NORTH);speed=player->move_speed;} else
+         int result = moveUnit(player,NORTH);
+         if (result == 0) {
+            speed=player->move_speed;
+            examineLocation();
+         } } else
       if (k == Keyboard::Numpad9){
-         moveUnit(player,NORTHEAST);speed=player->move_speed;}
+         int result = moveUnit(player,NORTHEAST);
+         if (result == 0) {
+            speed=player->move_speed;
+            examineLocation();
+         } }
 
       addUnitToQueue( player, speed );
       clearCurrentUnit();
@@ -557,7 +698,13 @@ int playGame()
    return 0;
 }
 
-void drawSidebar()
+//////////////////////////////////////////////////////////////////////
+// Visuals
+//////////////////////////////////////////////////////////////////////
+
+// System log
+
+void drawSystemLog()
 {
    int y;
    for (y = 1; y < 27; ++y) {
@@ -568,7 +715,26 @@ void drawSidebar()
    writeString( "System Log", Color::White, Color::Black, 61, 1 );
    writeString( "+------------------+", Color::White, Color::Black, 60, 2 );
    writeString( "+------------------+", Color::White, Color::Black, 60, 27 );
+
+   // Log contents
+   std::deque<std::string>::iterator log_it = system_log.begin(), log_end = system_log.end();
+   for (int i = 0; i < system_log_scroll; ++i) {
+      if (log_it == log_end)
+         return;
+
+      ++log_it;
+   }
+
+   for (y = 26; y > 2; --y) {
+      if (log_it == log_end)
+         return;
+
+      writeString( *log_it, Color::White, Color::Black, 61, y );
+      ++log_it;
+   }
 }
+
+// HUD/BottomBar
    
 void drawBottomBar()
 {
@@ -576,6 +742,8 @@ void drawBottomBar()
    tick_string << "Ticks: " << ticks;
    writeString( tick_string.str(), Color::White, Color::Black, 5, 29 );
 }
+
+// The rest
 
 int displayGame()
 {
@@ -587,7 +755,7 @@ int displayGame()
          ch->drawEquipScreen( selection );
       }
    }
-   else if (game_state == INVENTORY_SCREEN)
+   else if (game_state == INVENTORY_SCREEN || game_state == INVENTORY_SELECT)
    {
       drawInventory();
    }
@@ -631,7 +799,7 @@ int displayGame()
       }
    }
 
-   drawSidebar();
+   drawSystemLog();
    drawBottomBar();
 
    drawDisplay();

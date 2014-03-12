@@ -25,6 +25,8 @@ int displayGame();
 
 extern Level* current_level;
 
+int dropFromInventory( Item *i );
+
 int moveUnit( Unit*, Direction );
 
 #endif
