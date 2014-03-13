@@ -51,5 +51,4 @@ struct Level {
 
    Level( int x, int y );
 };
-
 #endif

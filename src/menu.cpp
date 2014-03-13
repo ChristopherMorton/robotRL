@@ -1,16 +1,19 @@
 #include "menu.h"
 #include "display.h"
 #include "game.h"
+#include "defs.h"
 #include "shutdown.h"
 
 #include <SFML/Graphics.hpp>
+
+using namespace sf;
 
 int which_menu = 1;
 int menu_selection = 1;
 int menu_max = 2;
 
-sf::Color MenuFG = sf::Color::White;
-sf::Color MenuBG = sf::Color::Black;
+Color MenuFG = C_WHITE;
+Color MenuBG = C_BLACK;
 
 void displayMenu()
 {
@@ -36,20 +39,23 @@ void displayMenu()
    }
 }
 
-int sendKeyToMenu( sf::Keyboard::Key k )
+int sendKeyToMenu( Keyboard::Key k , int mod )
 {
-   if (k == sf::Keyboard::Up) {
+   if (k == Keyboard::Q && (mod & MOD_SHIFT))
+      shutdown(1, 1);
+
+   if (k == Keyboard::Up) {
       menu_selection--;
       if (menu_selection == 0)
          menu_selection = menu_max;
    }
-   if (k == sf::Keyboard::Down) {
+   if (k == Keyboard::Down) {
       menu_selection++;
       if (menu_selection > menu_max)
          menu_selection = 1;
    }
 
-   if (k == sf::Keyboard::Return || k == sf::Keyboard::Space) {
+   if (k == Keyboard::Return || k == Keyboard::Space) {
       if (which_menu == 1) {
 
          if (menu_selection == 1) {

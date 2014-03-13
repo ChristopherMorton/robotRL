@@ -4,28 +4,29 @@
 #include "game.h"
 #include "syslog.h"
 #include "units.h"
+#include "defs.h"
 
 #include <sstream>
 
 using namespace sf;
 
 void Item::drawItem( int x, int y ) {
-   writeChar( display_char, Color::White, Color::Black, x, y );
+   writeChar( display_char, C_WHITE, C_BLACK, x, y );
 }
 
 /* Generic Items have only one action:
- * 0 - Drop
+ * a)Drop
  */
 
 int Item::drawActions()
 {
-   const int column = 33, header_column = 31;
-   int row = 12;
+   int row = actions_start_row;
 
-   writeString( "Actions:", Color::White, Color::Black, header_column, row );
+   writeString( "Actions:", C_WHITE, C_BLACK, actions_header_column, row );
    row++;
 
-   writeString( "a) Drop", Color::White, Color::Black, column, row );
+   writeString( "a)", C_GRAY, C_BLACK, actions_header_column, row);
+   writeString( "Drop", C_WHITE, C_BLACK, actions_column, row );
 
    return num_actions;
 }
@@ -40,7 +41,7 @@ int Item::doAction( int selection )
 
 void Item::drawDescription()
 {
-   writeString( getName(), Color::White, Color::Black, 32, 2 );
+   writeString( getName(), C_WHITE, C_BLACK, desc_col, 2 );
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -269,7 +270,7 @@ int Chassis::addArm( Item* arm )
       log("Chassis can't add arm, arm has a next Item* attached");
       retval = -3;
    }
-   else if (arm->type != ARM) {
+   else if (arm->type != ARM && arm->type != MOUNT) {
       log("Chassis can't add arm, as it is not an arm item");
       retval = -4;
    } else if (arms == NULL && num_arms > 0) {
@@ -294,89 +295,105 @@ int Chassis::addArm( Item* arm )
       }
 
       // No space
-      log("Chassis can't add arm, no more arm slots");
+      writeSystemLog( ">ERROR - CANNOT EQUIP:" );
+      writeSystemLog( arm->getName() );
+      writeSystemLog( "ARM SLOTS AT CAPACITY" );
       retval = -1;
    }
-
-   writeSystemLog( ">Unable to equip:" );
-   writeSystemLog( getName() );
 
    return retval;
 }
 
 int Chassis::addMount( Item* mount )
 {
+   int retval = 0;
    if (mount == NULL) {
       log("Chassis can't add mount, mount is NULL");
-      return -2;
+      retval = -2;
    }
-   
-   if (mount->next != NULL) {
+   else if (mount->next != NULL) {
       log("Chassis can't add mount, mount has a next Item* attached");
-      return -3;
+      retval = -3;
    }
-
-   if (mount->type != MOUNT) {
-      log("Chassis can't add mount, as it is not a mounted item");
-      return -4;
-   }
-
-   if (mounts == NULL && num_mounts > 0) {
+   else if (mount->type != MOUNT) {
+      log("Chassis can't add mount, as it is not a mount item");
+      retval = -4;
+   } else if (mounts == NULL && num_mounts > 0) {
       mounts = mount;
+      writeSystemLog( ">Equipped:" );
+      writeSystemLog( mount->getName() );
       return 0;
    }
-
-   int count = 1;
-   Item *cur = mounts;
-   while( count < num_mounts ) {
-      if (cur->next == NULL) { // Slot in here
-         cur->next = mount;
-         return 0;
+   else
+   { 
+      int count = 1;
+      Item *cur = mounts;
+      while( count < num_mounts ) {
+         if (cur->next == NULL) { // Slot in here
+            cur->next = mount;
+            writeSystemLog( ">Equipped:" );
+            writeSystemLog( mount->getName() );
+            return 0;
+         }
+         cur = cur->next;
+         count++;
       }
-      cur = cur->next;
-      count++;
+
+      // No space
+      log("Chassis can't add mount, no more mount slots");
+      retval = -1;
    }
-   // No space
-   log("Chassis can't add mount, no more mount slots");
-   return -1;
+
+   writeSystemLog( ">Unable to equip:" );
+   writeSystemLog( mount->getName() );
+
+   return retval;
 }
 
 int Chassis::addSystem( Item* system )
 {
+   int retval = 0;
    if (system == NULL) {
       log("Chassis can't add system, system is NULL");
-      return -2;
+      retval = -2;
    }
-   
-   if (system->next != NULL) {
+   else if (system->next != NULL) {
       log("Chassis can't add system, system has a next Item* attached");
-      return -3;
+      retval = -3;
    }
-
-   if (system->type != SYSTEM) {
+   else if (system->type != SYSTEM) {
       log("Chassis can't add system, as it is not a system item");
-      return -4;
-   }
-
-
-   if (systems == NULL && num_systems > 0) {
+      retval = -4;
+   } else if (systems == NULL && num_systems > 0) {
       systems = system;
+      writeSystemLog( ">Equipped:" );
+      writeSystemLog( system->getName() );
       return 0;
    }
-
-   int count = 1;
-   Item *cur = systems;
-   while( count < num_systems ) {
-      if (cur->next == NULL) { // Slot in here
-         cur->next = system;
-         return 0;
+   else
+   { 
+      int count = 1;
+      Item *cur = systems;
+      while( count < num_systems ) {
+         if (cur->next == NULL) { // Slot in here
+            cur->next = system;
+            writeSystemLog( ">Equipped:" );
+            writeSystemLog( system->getName() );
+            return 0;
+         }
+         cur = cur->next;
+         count++;
       }
-      cur = cur->next;
-      count++;
+
+      // No space
+      log("Chassis can't add system, no more system slots");
+      retval = -1;
    }
-   // No space
-   log("Chassis can't add system, no more system slots");
-   return -1;
+
+   writeSystemLog( ">Unable to equip:" );
+   writeSystemLog( system->getName() );
+
+   return retval;
 }
 
 Item* Chassis::removeArm( int number )
@@ -532,20 +549,20 @@ int Chassis::getTotalSlots()
 
 void Chassis::listEquipment( int selection )
 {
-   const int column = 33, header_column = 31, column_end = 57;
+   const int column = 31, header_column = 29, column_end = 50;
    int row = 1, count = 0;
    Item *to_write;
 
    to_write = arms;
-   writeString( "ARM SLOTS:", Color::White, Color::Black, header_column, row );
+   writeString( "ARM SLOTS:", C_WHITE, C_BLACK, header_column, row );
    ++row;
    for (int i = 0; i < num_arms; ++i) {
       if (to_write != NULL) {
-         writeString( to_write->getName(), Color::White, Color::Black, column, row );
+         writeString( to_write->getName(), C_WHITE, C_BLACK, column, row );
          to_write = to_write->next;
       }
       else {
-         writeString( "<empty>", Color::White, Color::Black, column, row );
+         writeString( "<empty>", C_WHITE, C_BLACK, column, row );
       }
 
       if (count == selection)
@@ -556,15 +573,15 @@ void Chassis::listEquipment( int selection )
    }
 
    to_write = mounts;
-   writeString( "MOUNT SLOTS:", Color::White, Color::Black, header_column, row );
+   writeString( "MOUNT SLOTS:", C_WHITE, C_BLACK, header_column, row );
    ++row;
    for (int i = 0; i < num_mounts; ++i) {
       if (to_write != NULL) {
-         writeString( to_write->getName(), Color::White, Color::Black, column, row );
+         writeString( to_write->getName(), C_WHITE, C_BLACK, column, row );
          to_write = to_write->next;
       }
       else
-         writeString( "<empty>", Color::White, Color::Black, column, row );
+         writeString( "<empty>", C_WHITE, C_BLACK, column, row );
 
       if (count == selection)
          colorInvert( column, row, column_end, row );
@@ -574,15 +591,15 @@ void Chassis::listEquipment( int selection )
    }
       
    to_write = systems;
-   writeString( "SYSTEM SLOTS:", Color::White, Color::Black, header_column, row );
+   writeString( "SYSTEM SLOTS:", C_WHITE, C_BLACK, header_column, row );
    ++row;
    for (int i = 0; i < num_systems; ++i) {
       if (to_write != NULL) {
-         writeString( to_write->getName(), Color::White, Color::Black, column, row );
+         writeString( to_write->getName(), C_WHITE, C_BLACK, column, row );
          to_write = to_write->next;
       }
       else
-         writeString( "<empty>", Color::White, Color::Black, column, row );
+         writeString( "<empty>", C_WHITE, C_BLACK, column, row );
 
       if (count == selection)
          colorInvert( column, row, column_end, row );
@@ -597,7 +614,7 @@ void Chassis::drawChassisStats( int row )
    std::stringstream dur_str;
    dur_str << "Durability:  " << durability << "/" << max_durability;
 
-   writeString( dur_str.str(), Color::White, Color::Black, 34, row );
+   writeString( dur_str.str(), C_WHITE, C_BLACK, 34, row );
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -632,41 +649,41 @@ std::string BasicChassis::getName() {
 
 void BasicChassis::drawDescription()
 {
-   writeString( getName(), Color::White, Color::Black, 32, 2 );
-   writeString( "A typical robotic frame,", Color::White, Color::Black, 32, 4);
-   writeString( "with plug-and-play ports", Color::White, Color::Black, 32, 5);
-   writeString( "for arms, system mods and", Color::White, Color::Black, 32, 6);
-   writeString( "one heavy mount.", Color::White, Color::Black, 32, 7);
+   writeString( getName(), C_WHITE, C_BLACK, desc_col, 2 );
+   writeString( "A typical robotic frame,", C_WHITE, C_BLACK, desc_col, 4);
+   writeString( "with plug-and-play ports", C_WHITE, C_BLACK, desc_col, 5);
+   writeString( "for arms, system mods, and", C_WHITE, C_BLACK, desc_col, 6);
+   writeString( "an extra heavy mount.", C_WHITE, C_BLACK, desc_col, 7);
 
    drawChassisStats( 9 );
 }
 
 void BasicChassis::drawEquipScreen( int selection )
 {
-   writeString("        Basic Chassis", Color::White, Color::Black, 0, 2);
-   writeString("          ----------", Color::White, Color::Black, 0, 4);
-   writeString("         |          |", Color::White, Color::Black, 0, 5);
-   writeString("         |  /\\  /\\  |", Color::White, Color::Black, 0, 6);
-   writeString("         |  \\/  \\/  |", Color::White, Color::Black, 0, 7);
-   writeString("         |          |", Color::White, Color::Black, 0, 8);
-   writeString("         |    ==    |  ++", Color::White, Color::Black, 0, 9);
-   writeString("          ----------   ++", Color::White, Color::Black, 0, 10);
-   writeString("              ||      //", Color::White, Color::Black, 0, 11);
-   writeString("      ------------------", Color::White, Color::Black, 0, 12);
-   writeString("      /                \\", Color::White, Color::Black, 0, 13);
-   writeString("     /  / \\        / \\  \\", Color::White, Color::Black, 0, 14);
-   writeString("    /  /   \\      /   \\  \\", Color::White, Color::Black, 0, 15);
-   writeString("    | |     \\    /     | |", Color::White, Color::Black, 0, 16);
-   writeString("    | |      \\--/      | |", Color::White, Color::Black, 0, 17);
-   writeString("    +++       ||       +++", Color::White, Color::Black, 0, 18);
-   writeString("            ------", Color::White, Color::Black, 0, 19);
-   writeString("           |      |", Color::White, Color::Black, 0, 20);
-   writeString("          / ------ \\", Color::White, Color::Black, 0, 21);
-   writeString("         //        \\\\", Color::White, Color::Black, 0, 22);
-   writeString("         ||        ||", Color::White, Color::Black, 0, 23);
-   writeString("         ||        ||", Color::White, Color::Black, 0, 24);
-   writeString("         ||        ||", Color::White, Color::Black, 0, 25);
-   writeString("       ----        ----", Color::White, Color::Black, 0, 26);
+   writeString("        Basic Chassis", C_WHITE, C_BLACK, 0, 2);
+   writeString("          ----------", C_WHITE, C_BLACK, 0, 4);
+   writeString("         |          |", C_WHITE, C_BLACK, 0, 5);
+   writeString("         |  /\\  /\\  |", C_WHITE, C_BLACK, 0, 6);
+   writeString("         |  \\/  \\/  |", C_WHITE, C_BLACK, 0, 7);
+   writeString("         |          |", C_WHITE, C_BLACK, 0, 8);
+   writeString("         |    ==    |  ++", C_WHITE, C_BLACK, 0, 9);
+   writeString("          ----------   ++", C_WHITE, C_BLACK, 0, 10);
+   writeString("              ||      //", C_WHITE, C_BLACK, 0, 11);
+   writeString("      ------------------", C_WHITE, C_BLACK, 0, 12);
+   writeString("      /                \\", C_WHITE, C_BLACK, 0, 13);
+   writeString("     /  / \\        / \\  \\", C_WHITE, C_BLACK, 0, 14);
+   writeString("    /  /   \\      /   \\  \\", C_WHITE, C_BLACK, 0, 15);
+   writeString("    | |     \\    /     | |", C_WHITE, C_BLACK, 0, 16);
+   writeString("    | |      \\--/      | |", C_WHITE, C_BLACK, 0, 17);
+   writeString("    +++       ||       +++", C_WHITE, C_BLACK, 0, 18);
+   writeString("            ------", C_WHITE, C_BLACK, 0, 19);
+   writeString("           |      |", C_WHITE, C_BLACK, 0, 20);
+   writeString("          / ------ \\", C_WHITE, C_BLACK, 0, 21);
+   writeString("         //        \\\\", C_WHITE, C_BLACK, 0, 22);
+   writeString("         ||        ||", C_WHITE, C_BLACK, 0, 23);
+   writeString("         ||        ||", C_WHITE, C_BLACK, 0, 24);
+   writeString("         ||        ||", C_WHITE, C_BLACK, 0, 25);
+   writeString("       ----        ----", C_WHITE, C_BLACK, 0, 26);
 
    listEquipment( selection );
 }
@@ -698,42 +715,42 @@ std::string QuadChassis::getName() {
 
 void QuadChassis::drawDescription()
 {
-   writeString( getName(), Color::White, Color::Black, 32, 2 );
-   writeString( "A four-armed extension of the basic", Color::White, Color::Black, 32, 4);
-   writeString( "frame, used for heavy lifting,", Color::White, Color::Black, 32, 5);
-   writeString( "mining, and melee combat.", Color::White, Color::Black, 32, 6);
+   writeString( getName(), C_WHITE, C_BLACK, desc_col, 2 );
+   writeString( "A four-armed extension of", C_WHITE, C_BLACK, desc_col, 4);
+   writeString( "the basic frame, built for", C_WHITE, C_BLACK, desc_col, 5);
+   writeString( "mining and melee combat.", C_WHITE, C_BLACK, desc_col, 6);
 
    drawChassisStats( 8 );
 }
 
 void QuadChassis::drawEquipScreen( int selection )
 {
-   writeString("                              ", Color::White, Color::Black, 0, 2);
-   writeString("                              ", Color::White, Color::Black, 0, 3);
-   writeString("                              ", Color::White, Color::Black, 0, 4);
-   writeString("                              ", Color::White, Color::Black, 0, 5);
-   writeString("                              ", Color::White, Color::Black, 0, 6);
-   writeString("                              ", Color::White, Color::Black, 0, 7);
-   writeString("                              ", Color::White, Color::Black, 0, 8);
-   writeString("                              ", Color::White, Color::Black, 0, 9);
-   writeString("                              ", Color::White, Color::Black, 0, 10);
-   writeString("                              ", Color::White, Color::Black, 0, 11);
-   writeString("                              ", Color::White, Color::Black, 0, 12);
-   writeString("                              ", Color::White, Color::Black, 0, 13);
-   writeString("                              ", Color::White, Color::Black, 0, 14);
-   writeString("                              ", Color::White, Color::Black, 0, 15);
-   writeString("                              ", Color::White, Color::Black, 0, 16);
-   writeString("                              ", Color::White, Color::Black, 0, 17);
-   writeString("                              ", Color::White, Color::Black, 0, 18);
-   writeString("                              ", Color::White, Color::Black, 0, 19);
-   writeString("                              ", Color::White, Color::Black, 0, 20);
-   writeString("                              ", Color::White, Color::Black, 0, 21);
-   writeString("                              ", Color::White, Color::Black, 0, 22);
-   writeString("                              ", Color::White, Color::Black, 0, 23);
-   writeString("                              ", Color::White, Color::Black, 0, 24);
-   writeString("                              ", Color::White, Color::Black, 0, 25);
-   writeString("                              ", Color::White, Color::Black, 0, 26);
-   writeString("                              ", Color::White, Color::Black, 0, 27);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 2);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 3);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 4);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 5);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 6);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 7);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 8);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 9);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 10);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 11);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 12);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 13);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 14);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 15);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 16);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 17);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 18);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 19);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 20);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 21);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 22);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 23);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 24);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 25);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 26);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 27);
 
    listEquipment( selection );
 
@@ -766,42 +783,42 @@ std::string DomeChassis::getName() {
 
 void DomeChassis::drawDescription()
 {
-   writeString( getName(), Color::White, Color::Black, 32, 2 );
-   writeString( "A rolling frame designed for", Color::White, Color::Black, 32, 4);
-   writeString( "high-level computing and command.", Color::White, Color::Black, 32, 5);
-   writeString( "Tough and efficient.", Color::White, Color::Black, 32, 6);
+   writeString( getName(), C_WHITE, C_BLACK, desc_col, 2 );
+   writeString( "A rolling frame designed for", C_WHITE, C_BLACK, desc_col, 4);
+   writeString( "calculation and command.", C_WHITE, C_BLACK, desc_col, 5);
+   writeString( "Tough and efficient.", C_WHITE, C_BLACK, desc_col, 6);
 
    drawChassisStats( 8 );
 } 
 
 void DomeChassis::drawEquipScreen( int selection )
 {
-   writeString("                              ", Color::White, Color::Black, 0, 2);
-   writeString("                              ", Color::White, Color::Black, 0, 3);
-   writeString("                              ", Color::White, Color::Black, 0, 4);
-   writeString("                              ", Color::White, Color::Black, 0, 5);
-   writeString("                              ", Color::White, Color::Black, 0, 6);
-   writeString("                              ", Color::White, Color::Black, 0, 7);
-   writeString("                              ", Color::White, Color::Black, 0, 8);
-   writeString("                              ", Color::White, Color::Black, 0, 9);
-   writeString("                              ", Color::White, Color::Black, 0, 10);
-   writeString("                              ", Color::White, Color::Black, 0, 11);
-   writeString("                              ", Color::White, Color::Black, 0, 12);
-   writeString("                              ", Color::White, Color::Black, 0, 13);
-   writeString("                              ", Color::White, Color::Black, 0, 14);
-   writeString("                              ", Color::White, Color::Black, 0, 15);
-   writeString("                              ", Color::White, Color::Black, 0, 16);
-   writeString("                              ", Color::White, Color::Black, 0, 17);
-   writeString("                              ", Color::White, Color::Black, 0, 18);
-   writeString("                              ", Color::White, Color::Black, 0, 19);
-   writeString("                              ", Color::White, Color::Black, 0, 20);
-   writeString("                              ", Color::White, Color::Black, 0, 21);
-   writeString("                              ", Color::White, Color::Black, 0, 22);
-   writeString("                              ", Color::White, Color::Black, 0, 23);
-   writeString("                              ", Color::White, Color::Black, 0, 24);
-   writeString("                              ", Color::White, Color::Black, 0, 25);
-   writeString("                              ", Color::White, Color::Black, 0, 26);
-   writeString("                              ", Color::White, Color::Black, 0, 27);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 2);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 3);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 4);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 5);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 6);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 7);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 8);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 9);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 10);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 11);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 12);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 13);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 14);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 15);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 16);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 17);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 18);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 19);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 20);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 21);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 22);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 23);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 24);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 25);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 26);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 27);
 
    listEquipment( selection );
 
@@ -834,41 +851,41 @@ std::string CritterChassis::getName() {
 
 void CritterChassis::drawDescription()
 {
-   writeString( getName(), Color::White, Color::Black, 32, 2 );
-   writeString( "A compact frame designed for", Color::White, Color::Black, 32, 4);
-   writeString( "mobility and unobtrusiveness.", Color::White, Color::Black, 32, 5);
+   writeString( getName(), C_WHITE, C_BLACK, desc_col, 2 );
+   writeString( "A compact frame specializing", C_WHITE, C_BLACK, desc_col, 4);
+   writeString( "in staying out of the way.", C_WHITE, C_BLACK, desc_col, 5);
 
    drawChassisStats( 7 );
 } 
 
 void CritterChassis::drawEquipScreen( int selection )
 {
-   writeString("                              ", Color::White, Color::Black, 0, 2);
-   writeString("                              ", Color::White, Color::Black, 0, 3);
-   writeString("                              ", Color::White, Color::Black, 0, 4);
-   writeString("                              ", Color::White, Color::Black, 0, 5);
-   writeString("                              ", Color::White, Color::Black, 0, 6);
-   writeString("                              ", Color::White, Color::Black, 0, 7);
-   writeString("                              ", Color::White, Color::Black, 0, 8);
-   writeString("                              ", Color::White, Color::Black, 0, 9);
-   writeString("                              ", Color::White, Color::Black, 0, 10);
-   writeString("                              ", Color::White, Color::Black, 0, 11);
-   writeString("                              ", Color::White, Color::Black, 0, 12);
-   writeString("                              ", Color::White, Color::Black, 0, 13);
-   writeString("                              ", Color::White, Color::Black, 0, 14);
-   writeString("                              ", Color::White, Color::Black, 0, 15);
-   writeString("                              ", Color::White, Color::Black, 0, 16);
-   writeString("                              ", Color::White, Color::Black, 0, 17);
-   writeString("                              ", Color::White, Color::Black, 0, 18);
-   writeString("                              ", Color::White, Color::Black, 0, 19);
-   writeString("                              ", Color::White, Color::Black, 0, 20);
-   writeString("                              ", Color::White, Color::Black, 0, 21);
-   writeString("                              ", Color::White, Color::Black, 0, 22);
-   writeString("                              ", Color::White, Color::Black, 0, 23);
-   writeString("                              ", Color::White, Color::Black, 0, 24);
-   writeString("                              ", Color::White, Color::Black, 0, 25);
-   writeString("                              ", Color::White, Color::Black, 0, 26);
-   writeString("                              ", Color::White, Color::Black, 0, 27);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 2);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 3);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 4);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 5);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 6);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 7);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 8);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 9);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 10);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 11);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 12);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 13);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 14);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 15);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 16);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 17);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 18);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 19);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 20);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 21);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 22);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 23);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 24);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 25);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 26);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 27);
 
    listEquipment( selection );
 
@@ -901,43 +918,42 @@ std::string HeavyChassis::getName() {
 
 void HeavyChassis::drawDescription()
 {
-   writeString( getName(), Color::White, Color::Black, 32, 2 );
-   writeString( "A massive bipedal frame with", Color::White, Color::Black, 32, 4);
-   writeString( "multiple heavy launchers", Color::White, Color::Black, 32, 5);
-   writeString( "protruding from its shoulders.", Color::White, Color::Black, 32, 6);
-   writeString( "Very powerful, but slow to move.", Color::White, Color::Black, 32, 7);
+   writeString( getName(), C_WHITE, C_BLACK, desc_col, 2 );
+   writeString( "A massive bipedal frame with", C_WHITE, C_BLACK, desc_col, 4);
+   writeString( "multiple heavy launchers.", C_WHITE, C_BLACK, desc_col, 5);
+   writeString( "Very powerful, but slow.", C_WHITE, C_BLACK, desc_col, 6);
 
    drawChassisStats( 9 );
 }
 
 void HeavyChassis::drawEquipScreen( int selection )
 {
-   writeString("                              ", Color::White, Color::Black, 0, 2);
-   writeString("                              ", Color::White, Color::Black, 0, 3);
-   writeString("                              ", Color::White, Color::Black, 0, 4);
-   writeString("                              ", Color::White, Color::Black, 0, 5);
-   writeString("                              ", Color::White, Color::Black, 0, 6);
-   writeString("                              ", Color::White, Color::Black, 0, 7);
-   writeString("                              ", Color::White, Color::Black, 0, 8);
-   writeString("                              ", Color::White, Color::Black, 0, 9);
-   writeString("                              ", Color::White, Color::Black, 0, 10);
-   writeString("                              ", Color::White, Color::Black, 0, 11);
-   writeString("                              ", Color::White, Color::Black, 0, 12);
-   writeString("                              ", Color::White, Color::Black, 0, 13);
-   writeString("                              ", Color::White, Color::Black, 0, 14);
-   writeString("                              ", Color::White, Color::Black, 0, 15);
-   writeString("                              ", Color::White, Color::Black, 0, 16);
-   writeString("                              ", Color::White, Color::Black, 0, 17);
-   writeString("                              ", Color::White, Color::Black, 0, 18);
-   writeString("                              ", Color::White, Color::Black, 0, 19);
-   writeString("                              ", Color::White, Color::Black, 0, 20);
-   writeString("                              ", Color::White, Color::Black, 0, 21);
-   writeString("                              ", Color::White, Color::Black, 0, 22);
-   writeString("                              ", Color::White, Color::Black, 0, 23);
-   writeString("                              ", Color::White, Color::Black, 0, 24);
-   writeString("                              ", Color::White, Color::Black, 0, 25);
-   writeString("                              ", Color::White, Color::Black, 0, 26);
-   writeString("                              ", Color::White, Color::Black, 0, 27);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 2);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 3);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 4);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 5);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 6);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 7);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 8);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 9);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 10);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 11);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 12);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 13);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 14);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 15);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 16);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 17);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 18);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 19);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 20);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 21);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 22);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 23);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 24);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 25);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 26);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 27);
 
    listEquipment( selection );
 
@@ -970,43 +986,43 @@ std::string OrbChassis::getName() {
 
 void OrbChassis::drawDescription()
 {
-   writeString( getName(), Color::White, Color::Black, 32, 2 );
-   writeString( "A levitating orb with six", Color::White, Color::Black, 32, 4);
-   writeString( "heavy-duty arm sockets.", Color::White, Color::Black, 32, 5);
-   writeString( "Extremely mobile, but", Color::White, Color::Black, 32, 6);
-   writeString( "with high energy costs.", Color::White, Color::Black, 32, 7);
+   writeString( getName(), C_WHITE, C_BLACK, desc_col, 2 );
+   writeString( "A levitating orb with six", C_WHITE, C_BLACK, desc_col, 4);
+   writeString( "heavy-duty arm sockets.", C_WHITE, C_BLACK, desc_col, 5);
+   writeString( "Extremely mobile, but", C_WHITE, C_BLACK, desc_col, 6);
+   writeString( "with high energy costs.", C_WHITE, C_BLACK, desc_col, 7);
 
    drawChassisStats( 9 );
 }
 
 void OrbChassis::drawEquipScreen( int selection )
 {
-   writeString("         Orb Chassis          ", Color::White, Color::Black, 0, 2);
-   writeString("                              ", Color::White, Color::Black, 0, 3);
-   writeString("                              ", Color::White, Color::Black, 0, 4);
-   writeString("                              ", Color::White, Color::Black, 0, 5);
-   writeString("                              ", Color::White, Color::Black, 0, 6);
-   writeString("       +++         +++        ", Color::White, Color::Black, 0, 7);
-   writeString("       \\  \\       /  /        ", Color::White, Color::Black, 0, 8);
-   writeString("        \\  \\     /  /         ", Color::White, Color::Black, 0, 9);
-   writeString("         \\  \\---/  /          ", Color::White, Color::Black, 0, 10);
-   writeString("          \\/     \\/           ", Color::White, Color::Black, 0, 11);
-   writeString("     +----|       |----+      ", Color::White, Color::Black, 0, 12);
-   writeString("     +    |  (O)  |    +      ", Color::White, Color::Black, 0, 13);
-   writeString("     +----|       |----+      ", Color::White, Color::Black, 0, 14);
-   writeString("          /\\     /\\           ", Color::White, Color::Black, 0, 15);
-   writeString("         /  /---\\  \\          ", Color::White, Color::Black, 0, 16);
-   writeString("        /  /     \\  \\         ", Color::White, Color::Black, 0, 17);
-   writeString("       /  /       \\  \\        ", Color::White, Color::Black, 0, 18);
-   writeString("       +++         +++        ", Color::White, Color::Black, 0, 19);
-   writeString("                              ", Color::White, Color::Black, 0, 20);
-   writeString("                              ", Color::White, Color::Black, 0, 21);
-   writeString("                              ", Color::White, Color::Black, 0, 22);
-   writeString("                              ", Color::White, Color::Black, 0, 23);
-   writeString("                              ", Color::White, Color::Black, 0, 24);
-   writeString("                              ", Color::White, Color::Black, 0, 25);
-   writeString("                              ", Color::White, Color::Black, 0, 26);
-   writeString("                              ", Color::White, Color::Black, 0, 27);
+   writeString("         Orb Chassis          ", C_WHITE, C_BLACK, 0, 2);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 3);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 4);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 5);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 6);
+   writeString("       +++         +++        ", C_WHITE, C_BLACK, 0, 7);
+   writeString("       \\  \\       /  /        ", C_WHITE, C_BLACK, 0, 8);
+   writeString("        \\  \\     /  /         ", C_WHITE, C_BLACK, 0, 9);
+   writeString("         \\  \\---/  /          ", C_WHITE, C_BLACK, 0, 10);
+   writeString("          \\/     \\/           ", C_WHITE, C_BLACK, 0, 11);
+   writeString("     +----|       |----+      ", C_WHITE, C_BLACK, 0, 12);
+   writeString("     +    |  (O)  |    +      ", C_WHITE, C_BLACK, 0, 13);
+   writeString("     +----|       |----+      ", C_WHITE, C_BLACK, 0, 14);
+   writeString("          /\\     /\\           ", C_WHITE, C_BLACK, 0, 15);
+   writeString("         /  /---\\  \\          ", C_WHITE, C_BLACK, 0, 16);
+   writeString("        /  /     \\  \\         ", C_WHITE, C_BLACK, 0, 17);
+   writeString("       /  /       \\  \\        ", C_WHITE, C_BLACK, 0, 18);
+   writeString("       +++         +++        ", C_WHITE, C_BLACK, 0, 19);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 20);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 21);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 22);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 23);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 24);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 25);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 26);
+   writeString("                              ", C_WHITE, C_BLACK, 0, 27);
 
    listEquipment( selection );
 }
@@ -1017,15 +1033,16 @@ void OrbChassis::drawEquipScreen( int selection )
 
 int Arm::drawActions()
 {
-   const int column = 33, header_column = 31;
-   int row = 12;
+   int row = actions_start_row;
 
-   writeString( "Actions:", Color::White, Color::Black, header_column, row );
+   writeString( "Actions:", C_WHITE, C_BLACK, actions_header_column, row );
    row++;
 
-   writeString( "a) Drop", Color::White, Color::Black, column, row );
+   writeString( "a)", C_GRAY, C_BLACK, actions_header_column, row);
+   writeString( "Drop", C_WHITE, C_BLACK, actions_column, row );
    row++;
-   writeString( "b) Equip (Arm)", Color::White, Color::Black, column, row );
+   writeString( "b)", C_GRAY, C_BLACK, actions_header_column, row);
+   writeString( "Equip (Arm)", C_WHITE, C_BLACK, actions_column, row );
 
    return num_actions;
 }
@@ -1067,12 +1084,176 @@ int ClawArm::meleeAttack( Unit *target )
 
 std::string ClawArm::getName()
 {
-   return "Claw Arm Mark I";
+   return "VRX110 Manipulator";
 } 
 
 void ClawArm::drawDescription()
 {
-   writeString( getName(), Color::White, Color::Black, 32, 2 );
-   writeString( "A mechanical arm that ends", Color::White, Color::Black, 32, 4);
-   writeString( "in a gripping claw.", Color::White, Color::Black, 32, 5);
+   writeString( getName(), C_WHITE, C_BLACK, desc_col, 2 );
+   writeString( "A mechanical arm that ends", C_WHITE, C_BLACK, desc_col, 4);
+   writeString( "in a gripping claw.", C_WHITE, C_BLACK, desc_col, 5);
+}
+
+HammerArm::HammerArm()
+{
+   type = ARM;
+   weapon_type = MELEE_WEAPON;
+   alt_next = NULL;
+   next = NULL;
+
+   num_actions = 2;
+
+   display_char = '(';
+}
+
+int HammerArm::meleeAttack( Unit *target )
+{
+   return 0;
+}
+
+std::string HammerArm::getName()
+{
+   return "Series A7 Demolisher";
+} 
+
+void HammerArm::drawDescription()
+{
+   writeString( getName(), C_WHITE, C_BLACK, desc_col, 2 );
+   writeString( "A massive pneumatic hammer.", C_WHITE, C_BLACK, desc_col, 4);
+}
+
+ShockArm::ShockArm()
+{
+   type = ARM;
+   weapon_type = MELEE_WEAPON;
+   alt_next = NULL;
+   next = NULL;
+
+   num_actions = 2;
+
+   display_char = '(';
+}
+
+int ShockArm::meleeAttack( Unit *target )
+{
+   return 0;
+}
+
+std::string ShockArm::getName()
+{
+   return "VRX770 Heavy Taser";
+} 
+
+void ShockArm::drawDescription()
+{
+   writeString( getName(), C_WHITE, C_BLACK, desc_col, 2 );
+   writeString( "Delivers 42,000,000V", C_WHITE, C_BLACK, desc_col, 4);
+   writeString( "directly into the target.", C_WHITE, C_BLACK, desc_col, 5);
+}
+
+EnergyLance::EnergyLance()
+{
+   type = ARM;
+   weapon_type = MELEE_WEAPON;
+   alt_next = NULL;
+   next = NULL;
+
+   num_actions = 2;
+
+   display_char = '(';
+}
+
+int EnergyLance::meleeAttack( Unit *target )
+{
+   return 0;
+}
+
+std::string EnergyLance::getName()
+{
+   return "Energy Lance Mk 1";
+} 
+
+void EnergyLance::drawDescription()
+{
+   writeString( getName(), C_WHITE, C_BLACK, desc_col, 2 );
+   writeString( "Spears your target on a", C_WHITE, C_BLACK, desc_col, 4);
+   writeString( "cone of destructive energy.", C_WHITE, C_BLACK, desc_col, 5);
+}
+
+//////////////////////////////////////////////////////////////////////
+// Mounts
+//////////////////////////////////////////////////////////////////////
+
+int Mount::drawActions()
+{
+   int row = actions_start_row;
+
+   writeString( "Actions:", C_WHITE, C_BLACK, actions_header_column, row );
+   row++;
+
+   writeString( "a)", C_GRAY, C_BLACK, actions_header_column, row);
+   writeString( "Drop", C_WHITE, C_BLACK, actions_column, row );
+   row++;
+   writeString( "b)", C_GRAY, C_BLACK, actions_header_column, row);
+   writeString( "Equip (Mount)", C_WHITE, C_BLACK, actions_column, row );
+   row++;
+   writeString( "c)", C_GRAY, C_BLACK, actions_header_column, row);
+   writeString( "Equip (Arm)", C_WHITE, C_BLACK, actions_column, row );
+
+   return num_actions;
+}
+
+
+int Mount::doAction( int selection )
+{
+   if (selection == 0)
+      dropItem( this );
+   else if (selection == 1) {
+      Chassis* ch = player->chassis;
+      if (ch) {
+         if (ch->addMount( this ) != 0)
+            return -1;
+      }
+   }
+   else if (selection == 2) {
+      Chassis* ch = player->chassis;
+      if (ch) {
+         if (ch->addArm( this ) != 0)
+            return -1;
+      }
+   }
+   else
+      return -1;
+
+   return 0;
+}
+
+Laser::Laser()
+{
+   type = MOUNT;
+   weapon_type = RANGED_WEAPON;
+   alt_next = NULL;
+   next = NULL;
+
+   num_actions = 3;
+
+   display_char = '}';
+}
+
+int Laser::rangedAttack( Unit *target )
+{
+   return 0;
+}
+
+std::string Laser::getName()
+{
+   return "VRX24 Mining Laser";
+} 
+
+void Laser::drawDescription()
+{
+   writeString( getName(), C_WHITE, C_BLACK, desc_col, 2 );
+   writeString( "Fires a beam of concentrated", C_WHITE, C_BLACK, desc_col, 4);
+   writeString( "photons that can eat", C_WHITE, C_BLACK, desc_col, 5);
+   writeString( "through any material.", C_WHITE, C_BLACK, desc_col, 6);
 }

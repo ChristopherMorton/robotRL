@@ -16,7 +16,7 @@ void loadGame();
 
 void testLevel();
 
-int sendKeyToGame( sf::Keyboard::Key k );
+int sendKeyToGame( sf::Keyboard::Key k, int mod=0 );
 
 int playGame();
 int displayGame();

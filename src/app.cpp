@@ -4,6 +4,7 @@
 #include "game.h"
 #include "shutdown.h"
 #include "listeners.h"
+#include "defs.h"
 #include "log.h"
 
 // SFML includes
@@ -49,7 +50,6 @@ enum AppState {
    LOADING,
    POSTLOAD,
    MAIN_MENU,
-   GAME_START,
    IN_GAME,
    SHUT_DOWN
 };
@@ -395,15 +395,16 @@ bool MainMouseListener::mouseWheelMoved( const sf::Event::MouseWheelEvent &mouse
 // Key
 bool MainKeyListener::keyPressed( const sf::Event::KeyEvent &key_press )
 {
-   if (key_press.code == sf::Keyboard::Q)
-      shutdown(1,1);
+   int mod = (key_press.alt?MOD_ALT:0) 
+           | (key_press.shift?MOD_SHIFT:0) 
+           | (key_press.control?MOD_CTRL:0);
 
    if (app_state == MAIN_MENU) {
-      if (sendKeyToMenu( key_press.code ) == 1) // Game is ready to play
+      if (sendKeyToMenu( key_press.code, mod ) == 1) // Game is ready to play
          app_state = IN_GAME;
    }
    else if (app_state == IN_GAME) {
-      sendKeyToGame( key_press.code );
+      sendKeyToGame( key_press.code, mod );
    }
 
    return true;

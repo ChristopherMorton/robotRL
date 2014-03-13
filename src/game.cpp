@@ -5,6 +5,7 @@
 #include "items.h"
 #include "units.h"
 #include "log.h"
+#include "defs.h"
 
 #include <vector>
 #include <queue>
@@ -52,7 +53,7 @@ unsigned long int ticks; // 'ticks' since game started
 // System Log
 //////////////////////////////////////////////////////////////////////
 
-const int system_log_width = 18;
+const int system_log_width = 23;
 const int system_log_memory = 100;
 std::deque<std::string> system_log;
 int system_log_scroll = 0;
@@ -382,14 +383,16 @@ int invSelectionPageUp()
       selection = 0;
 
    menu_scroll += (selection - old);
+   if (menu_scroll < 0) menu_scroll = 0;
+
    return 0;
 }
 
 int drawInventory()
 {
-   const int column = 4, header_column = 2, column_end = 27;
+   const int column = 4, header_column = 2, column_end = 23;
    int row = 1;
-   writeString( "Inventory:", Color::White, Color::Black, header_column, row );
+   writeString( "Inventory:", C_WHITE, C_BLACK, header_column, row );
    row++;
 
    Item* i = player->inventory;
@@ -400,14 +403,19 @@ int drawInventory()
       i = i->next;
    }
 
+   char alpha = 'a';
    while (i != NULL && row < 28) {
-      writeString( i->getName(), Color::White, Color::Black, column, row );
+      writeChar( alpha, C_GRAY, C_BLACK, 2, row );
+      writeChar( ')', C_GRAY, C_BLACK, 3, row );
+      alpha++;
+
+      writeString( i->getName(), C_WHITE, C_BLACK, column, row );
       if (count == selection) {
          colorInvert( column, row, column_end, row );
          i->drawDescription();
          if (game_state == INVENTORY_SELECT) {
             i->drawActions();
-            colorInvert( 33, 13+alt_selection, 57, 13+alt_selection );
+            colorInvert( actions_column, 13+alt_selection, actions_column+19, 13+alt_selection );
          }
       }
 
@@ -464,6 +472,11 @@ Item *invRemoveSelected()
 
 void invReplaceSelected( Item *i )
 {
+   if (selection == 0) {
+      i->next = player->inventory;
+      player->inventory = i;
+      return;
+   }
    if (inv_selected_prev == NULL) {
       Item *i = player->inventory;
       int count = 0;
@@ -543,6 +556,9 @@ void buildLimitedInventory( ItemType type ) {
       latest = latest->next;
    }
 
+   if (l_i_end)
+      l_i_end->alt_next = NULL;
+
    max_selection = count;
    selection = 0;
 }
@@ -563,9 +579,9 @@ Item *limitedInvSelectedItem()
 
 void drawLimitedInventory()
 {
-   const int column = 4, header_column = 2, column_end = 27;
+   const int column = 4, header_column = 2, column_end = 23;
    int row = 1;
-   writeString( "Limited Inventory:", Color::White, Color::Black, header_column, row );
+   writeString( "Limited Inventory:", C_WHITE, C_BLACK, header_column, row );
    row++;
 
    Item* i = limited_inventory;
@@ -576,8 +592,13 @@ void drawLimitedInventory()
       i = i->alt_next;
    }
 
+   char alpha = 'a';
    while (i != NULL && row < 28) {
-      writeString( i->getName(), Color::White, Color::Black, column, row );
+      writeChar( alpha, C_GRAY, C_BLACK, 2, row );
+      writeChar( ')', C_GRAY, C_BLACK, 3, row );
+      alpha++;
+
+      writeString( i->getName(), C_WHITE, C_BLACK, column, row );
       if (count == selection) {
          colorInvert( column, row, column_end, row );
       }
@@ -663,7 +684,7 @@ void testLevel()
    putUnit( player, 25, 25 );
    current_unit = player;
 
-   player->chassis = new OrbChassis();
+   player->chassis = new BasicChassis();
    player->chassis->addArm( new ClawArm() );
    player->chassis->addArm( new ClawArm() );
 
@@ -671,7 +692,9 @@ void testLevel()
       addToInventory( new ClawArm() );
 
    for (int r = 0; r < 20; ++r)
-      addToInventory( new BasicChassis() );
+      addToInventory( new EnergyLance() );
+
+   addToInventory( new Laser() );
 
    Unit* rr = new AI();
    putUnit( rr, 27, 28 );
@@ -684,15 +707,98 @@ void testLevel()
 // Main Interface
 //////////////////////////////////////////////////////////////////////
 
-std::stack<Keyboard::Key> input_stack;
+struct KeyInput {
+   Keyboard::Key k;
+   int mod;
 
-int sendKeyToGame( Keyboard::Key k )
+   KeyInput( Keyboard::Key kk ) {k = kk; mod = 0;}
+   KeyInput( Keyboard::Key kk, int m ) {k = kk; mod = m;}
+};
+
+std::stack<KeyInput> input_stack;
+
+bool alphaSelect( Keyboard::Key k, int scroll_offset, bool alt )
 {
-   if (k == Keyboard::Q)
+   int new_select = -1, max_select = max_selection;
+   if (alt)
+      max_select = max_alt_selection;
+
+   max_select += scroll_offset;
+
+   if (k == Keyboard::A && max_select >= 1) {
+      new_select = 0; } else
+   if (k == Keyboard::B && max_select >= 2) {
+      new_select = 1; } else
+   if (k == Keyboard::C && max_select >= 3) {
+      new_select = 2; } else
+   if (k == Keyboard::D && max_select >= 4) {
+      new_select = 3; } else
+   if (k == Keyboard::E && max_select >= 5) {
+      new_select = 4; } else
+   if (k == Keyboard::F && max_select >= 6) {
+      new_select = 5; } else
+   if (k == Keyboard::G && max_select >= 7) {
+      new_select = 6; } else
+   if (k == Keyboard::H && max_select >= 8) {
+      new_select = 7; } else
+   if (k == Keyboard::I && max_select >= 9) {
+      new_select = 8; } else
+   if (k == Keyboard::J && max_select >= 10) {
+      new_select = 9; } else
+   if (k == Keyboard::K && max_select >= 11) {
+      new_select = 10; } else
+   if (k == Keyboard::L && max_select >= 12) {
+      new_select = 11; } else
+   if (k == Keyboard::M && max_select >= 13) {
+      new_select = 12; } else
+   if (k == Keyboard::N && max_select >= 14) {
+      new_select = 13; } else
+   if (k == Keyboard::O && max_select >= 15) {
+      new_select = 14; } else
+   if (k == Keyboard::P && max_select >= 16) {
+      new_select = 15; } else
+   if (k == Keyboard::Q && max_select >= 17) {
+      new_select = 16; } else
+   if (k == Keyboard::R && max_select >= 18) {
+      new_select = 17; } else
+   if (k == Keyboard::S && max_select >= 19) {
+      new_select = 18; } else
+   if (k == Keyboard::T && max_select >= 20) {
+      new_select = 19; } else
+   if (k == Keyboard::U && max_select >= 21) {
+      new_select = 20; } else
+   if (k == Keyboard::V && max_select >= 22) {
+      new_select = 21; } else
+   if (k == Keyboard::W && max_select >= 23) {
+      new_select = 22; } else
+   if (k == Keyboard::X && max_select >= 24) {
+      new_select = 23; } else
+   if (k == Keyboard::Y && max_select >= 25) {
+      new_select = 24; } else
+   if (k == Keyboard::Z && max_select >= 26) {
+      new_select = 25; }
+
+   if (new_select != -1) {
+      new_select += scroll_offset;
+
+      if (alt)
+         alt_selection = new_select;
+      else
+         selection = new_select;
+
+      return true;
+   }
+   else
+      return false;
+}
+
+int sendKeyToGame( Keyboard::Key k, int mod )
+{
+   if (k == Keyboard::Q && (mod & MOD_SHIFT))
       shutdown(1, 1);
 
    if (!waiting_for_input) {
-      input_stack.push(k);
+      input_stack.push(KeyInput(k, mod));
       return 1;
    }
 
@@ -708,6 +814,9 @@ int sendKeyToGame( Keyboard::Key k )
    }
    
    if (game_state == INVENTORY_SCREEN) {
+      if (alphaSelect( k, menu_scroll, false ))
+         return 0;
+
       if (k == Keyboard::I || k == Keyboard::Escape || k == Keyboard::BackSpace) {
          game_state = ON_MAP; } else
       if (k == Keyboard::Numpad2 || k == Keyboard::Down) {
@@ -729,6 +838,9 @@ int sendKeyToGame( Keyboard::Key k )
    }
 
    if (game_state == INVENTORY_SELECT) {
+      if (alphaSelect( k, 0, true ))
+         return 0;
+
       if (k == Keyboard::Escape || k == Keyboard::BackSpace) {
          game_state = INVENTORY_SCREEN; } else
       if (k == Keyboard::Numpad2 || k == Keyboard::Down) {
@@ -764,6 +876,7 @@ int sendKeyToGame( Keyboard::Key k )
             game_state = EQUIP_INVENTORY;
             ItemType slot = player->chassis->getSlot( alt_selection );
             buildLimitedInventory( slot );
+            menu_scroll = 0;
 
          } else {
             addToInventory( retval );
@@ -776,6 +889,9 @@ int sendKeyToGame( Keyboard::Key k )
    }
 
    if (game_state == EQUIP_INVENTORY) {
+      if (alphaSelect( k, menu_scroll, false ))
+         return 0;
+
       if (k == Keyboard::Escape || k == Keyboard::BackSpace) {
          game_state = EQUIP_SCREEN; } else
       if (k == Keyboard::Numpad2 || k == Keyboard::Down) {
@@ -888,9 +1004,9 @@ int playGame()
 {
    if (waiting_for_input) { // wait for input
       while (!input_stack.empty() && waiting_for_input) {
-         Keyboard::Key next_input = input_stack.top();
+         KeyInput next_input = input_stack.top();
          input_stack.pop();
-         sendKeyToGame( next_input );
+         sendKeyToGame( next_input.k, next_input.mod );
       }
    }
    else
@@ -920,15 +1036,16 @@ int playGame()
 
 void drawSystemLog()
 {
+   const int start_col = 55, end_col = 79;
    int y;
    for (y = 1; y < 27; ++y) {
-      writeChar( '|', Color::White, Color::Black, 60, y );
-      writeChar( '|', Color::White, Color::Black, 79, y );
+      writeChar( '|', C_WHITE, C_BLACK, start_col, y );
+      writeChar( '|', C_WHITE, C_BLACK, end_col, y );
    }
-   writeString( "+------------------+", Color::White, Color::Black, 60, 0 );
-   writeString( "System Log", Color::White, Color::Black, 61, 1 );
-   writeString( "+------------------+", Color::White, Color::Black, 60, 2 );
-   writeString( "+------------------+", Color::White, Color::Black, 60, 27 );
+   writeString( "+-----------------------+", C_WHITE, C_BLACK, start_col, 0 );
+   writeString( "System Log", C_WHITE, C_BLACK, start_col+1, 1 );
+   writeString( "+-----------------------+", C_WHITE, C_BLACK, start_col, 2 );
+   writeString( "+-----------------------+", C_WHITE, C_BLACK, start_col, 27 );
 
    // Log contents
    std::deque<std::string>::iterator log_it = system_log.begin(), log_end = system_log.end();
@@ -943,7 +1060,7 @@ void drawSystemLog()
       if (log_it == log_end)
          return;
 
-      writeString( *log_it, Color::White, Color::Black, 61, y );
+      writeString( *log_it, C_WHITE, C_BLACK, start_col+1, y );
       ++log_it;
    }
 }
@@ -954,7 +1071,7 @@ void drawBottomBar()
 {
    std::stringstream tick_string;
    tick_string << "Ticks: " << ticks;
-   writeString( tick_string.str(), Color::White, Color::Black, 5, 29 );
+   writeString( tick_string.str(), C_WHITE, C_BLACK, 5, 29 );
 }
 
 // The rest
@@ -985,7 +1102,7 @@ int displayGame()
 
       doFOV();
 
-      for (int x = 0; x < 60; x++) {
+      for (int x = 0; x < 55; x++) {
          for (int y = 0; y < 28; y++) {
 
             int map_x = x + map_view_base.x, map_y = y + map_view_base.y;
@@ -1005,13 +1122,13 @@ int displayGame()
                l.items->drawItem(x, y);
             } else {
                if (l.ter == FLOOR)
-                  writeChar( '.', Color::White, Color::Black, x, y );
+                  writeChar( '.', C_WHITE, C_BLACK, x, y );
                else if (l.ter == IMPASSABLE_WALL)
-                  writeChar( ' ', Color::Black, Color::White, x, y );
+                  writeChar( ' ', C_BLACK, C_WHITE, x, y );
                else if (l.ter >= STAIRS_UP_1 && l.ter <= STAIRS_UP_4)
-                  writeChar( '<', Color::White, Color::Black, x, y );
+                  writeChar( '<', C_WHITE, C_BLACK, x, y );
                else if (l.ter >= STAIRS_DOWN_1 && l.ter <= STAIRS_DOWN_4)
-                  writeChar( '>', Color::White, Color::Black, x, y );
+                  writeChar( '>', C_WHITE, C_BLACK, x, y );
             }
 
             if (visibility & MAP_SEEN && !(visibility & MAP_VISIBLE))

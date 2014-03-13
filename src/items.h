@@ -177,4 +177,48 @@ struct ClawArm : public Arm, public MeleeWeapon
    virtual void drawDescription();
 };
 
+struct HammerArm : public Arm, public MeleeWeapon
+{
+   HammerArm();
+   virtual int meleeAttack( Unit *target );
+   virtual std::string getName();
+
+   virtual void drawDescription();
+};
+
+struct ShockArm : public Arm, public MeleeWeapon
+{
+   ShockArm();
+   virtual int meleeAttack( Unit *target );
+   virtual std::string getName();
+
+   virtual void drawDescription();
+};
+
+struct EnergyLance : public Arm, public MeleeWeapon
+{
+   EnergyLance();
+   virtual int meleeAttack( Unit *target );
+   virtual std::string getName();
+
+   virtual void drawDescription();
+};
+
+// Mounted items
+
+struct Mount : public Item
+{
+   virtual int drawActions();
+   virtual int doAction( int selection );
+};
+
+struct Laser : public Mount, public RangedWeapon
+{
+   Laser();
+   virtual int rangedAttack( Unit *target );
+   virtual std::string getName();
+
+   virtual void drawDescription();
+};
+
 #endif
