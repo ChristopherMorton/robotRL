@@ -291,7 +291,7 @@ int addToInventory( Item *to_add )
    return 0;
 }
 
-int dropFromInventory( Item *i )
+int removeFromInventory( Item *i )
 {
    Item *prev = player->inventory;
 
@@ -299,21 +299,38 @@ int dropFromInventory( Item *i )
 
    if (prev == i) {
       player->inventory = prev->next;
-      Location &drop_point = current_level->map[player->pos_y][player->pos_x];
-      prev->next = drop_point.items;
-      drop_point.items = prev;
+      i->next = NULL;
       return 0;
    }
 
    while (prev != NULL) {
       if (prev->next == i) {
          prev->next = i->next; // removed
-         Location &drop_point = current_level->map[player->pos_y][player->pos_x];
-         i->next = drop_point.items;
-         drop_point.items = i;
+         i->next = NULL;
          return 0;
       }
       prev = prev->next;
+   }
+
+   return -2;
+}
+
+int dropItem( Item *i )
+{
+   Location &drop_point = current_level->map[player->pos_y][player->pos_x];
+   i->next = drop_point.items;
+   drop_point.items = i;
+
+   writeSystemLog( ">Dropped:" );
+   writeSystemLog( i->getName() );
+   return 0;
+}
+
+int dropFromInventory( Item *i )
+{
+   if (removeFromInventory( i ) == 0) {
+      dropItem( i );
+      return 0;
    }
 
    log("Couldn't drop item, it was not in the inventory.");
@@ -415,6 +432,162 @@ Item *invSelectedItem()
    return NULL;
 }
 
+Item *inv_selected_prev = NULL;
+
+Item *invRemoveSelected()
+{
+   Item *i = player->inventory;
+   int count = 0;
+   if (selection == 0 && i != NULL) {
+      player->inventory = i->next;
+      i->next = NULL;
+      return i;
+   }
+   
+   inv_selected_prev = i;
+   count++;
+   i = i->next;
+
+   while (i != NULL) {
+      if (count == selection) {
+         inv_selected_prev->next = i->next;
+         i->next = NULL;
+         return i;
+      }
+
+      inv_selected_prev = i;
+      count++;
+      i = i->next;
+   }
+   return NULL; 
+}
+
+void invReplaceSelected( Item *i )
+{
+   if (inv_selected_prev == NULL) {
+      Item *i = player->inventory;
+      int count = 0;
+      while (i != NULL) {
+         if (count == selection - 1) {
+            inv_selected_prev = i;
+            break;
+         }
+
+         count++;
+         i = i->next;
+      }
+   }
+
+   i->next = inv_selected_prev->next;
+   inv_selected_prev->next = i;
+
+   inv_selected_prev = NULL;
+}
+
+// Limited Inventory = sorted/filtered
+
+Item *limited_inventory = NULL;
+
+void buildLimitedInventory( ItemType type ) {
+   Item *latest = player->inventory, *l_i_end = NULL;
+   bool match = false;
+   int count = 0;
+
+   limited_inventory = NULL;
+
+   while (latest != NULL) {
+      match = false;
+      switch (type) {
+         case CHASSIS:
+            if (latest->type == CHASSIS) match = true;
+            break;
+         case ARM:
+            if (latest->type == ARM) match = true;
+         case MOUNT:
+            if (latest->type == MOUNT) match = true;
+            break;
+         case SYSTEM:
+            if (latest->type == SYSTEM) match = true;
+            break;
+         case MISSILE:
+            if (latest->type == MISSILE) match = true;
+            break;
+         case GRENADE:
+            if (latest->type == GRENADE) match = true;
+            break;
+         case MINE:
+            if (latest->type == MINE) match = true;
+            break;
+         case TURRET:
+            if (latest->type == TURRET) match = true;
+            break;
+         case DEVICE:
+            if (latest->type == DEVICE) match = true;
+            break;
+         case CODE:
+            if (latest->type == CODE) match = true;
+            break;
+         case REMAINS:
+            if (latest->type == REMAINS) match = true;
+            break;
+      }
+      if (match) {
+         if (limited_inventory == NULL)
+            limited_inventory = latest;
+         else
+            l_i_end->alt_next = latest;
+
+         l_i_end = latest;
+         count++;
+      }
+      latest = latest->next;
+   }
+
+   max_selection = count;
+   selection = 0;
+}
+
+Item *limitedInvSelectedItem()
+{
+   Item *i = limited_inventory;
+   int count = 0;
+   while (i != NULL) {
+      if (count == selection)
+         return i;
+
+      count++;
+      i = i->alt_next;
+   }
+   return NULL;
+}
+
+void drawLimitedInventory()
+{
+   const int column = 4, header_column = 2, column_end = 27;
+   int row = 1;
+   writeString( "Limited Inventory:", Color::White, Color::Black, header_column, row );
+   row++;
+
+   Item* i = limited_inventory;
+
+   int count = 0; 
+   while (count < menu_scroll && i != NULL) {
+      count++;
+      i = i->alt_next;
+   }
+
+   while (i != NULL && row < 28) {
+      writeString( i->getName(), Color::White, Color::Black, column, row );
+      if (count == selection) {
+         colorInvert( column, row, column_end, row );
+      }
+
+      row++;
+      count++;
+      i = i->alt_next;
+   }
+}
+
 // Interacting with the environment
 
 void examineLocation()
@@ -490,7 +663,7 @@ void testLevel()
    putUnit( player, 25, 25 );
    current_unit = player;
 
-   player->chassis = new BasicChassis();
+   player->chassis = new OrbChassis();
    player->chassis->addArm( new ClawArm() );
    player->chassis->addArm( new ClawArm() );
 
@@ -505,8 +678,6 @@ void testLevel()
    addUnitToQueue( rr, 500 );
 
    game_state = ON_MAP;
-
-   writeSystemLog("TEST");
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -566,8 +737,13 @@ int sendKeyToGame( Keyboard::Key k )
          if (--alt_selection == -1) alt_selection = max_alt_selection - 1; } else
       if (k == Keyboard::Space || k == Keyboard::Return) {
          // Do that Item action
-         Item *selected = invSelectedItem();
-         if(selected != NULL) selected->doAction( alt_selection );
+         Item *selected = invRemoveSelected();
+         // Most actions require the item to be removed first
+         if(selected != NULL) {
+            int result = selected->doAction( alt_selection );
+            if (result != 0) // Failure
+               invReplaceSelected( selected );
+         }
          game_state = ON_MAP;
       }
 
@@ -579,16 +755,54 @@ int sendKeyToGame( Keyboard::Key k )
       if (k == Keyboard::E || k == Keyboard::Escape || k == Keyboard::BackSpace) {
          game_state = ON_MAP; } else 
       if (k == Keyboard::Numpad2 || k == Keyboard::Down) {
-         if (++selection == max_selection) selection = 0; } else
+         if (++alt_selection == max_alt_selection) alt_selection = 0; } else
       if (k == Keyboard::Numpad8 || k == Keyboard::Up) {
-         if (--selection == -1) selection = max_selection - 1; } else
+         if (--alt_selection == -1) alt_selection = max_alt_selection - 1; } else
       if (k == Keyboard::Space || k == Keyboard::Return) {
-         Item *retval = player->chassis->removeAny( selection );
-         if (retval == NULL) // Selected <empty>
+         Item *retval = player->chassis->removeAny( alt_selection );
+         if (retval == NULL) { // Selected <empty>
             game_state = EQUIP_INVENTORY;
-         else
+            ItemType slot = player->chassis->getSlot( alt_selection );
+            buildLimitedInventory( slot );
+
+         } else {
             addToInventory( retval );
+            writeSystemLog( ">Unequipped:" );
+            writeSystemLog( retval->getName() );
+         }
       }
+
+      return 0;
+   }
+
+   if (game_state == EQUIP_INVENTORY) {
+      if (k == Keyboard::Escape || k == Keyboard::BackSpace) {
+         game_state = EQUIP_SCREEN; } else
+      if (k == Keyboard::Numpad2 || k == Keyboard::Down) {
+         invSelectionDown(); } else
+      if (k == Keyboard::Numpad8 || k == Keyboard::Up) {
+         invSelectionUp(); } else
+      if (k == Keyboard::PageDown) {
+         invSelectionPageDown(); } else
+      if (k == Keyboard::PageUp) {
+         invSelectionPageUp(); } else
+      if (k == Keyboard::Space || k == Keyboard::Return) {
+         Item *selected = limitedInvSelectedItem();
+         if (selected != NULL) {
+            ItemType slot = player->chassis->getSlot( alt_selection );
+            removeFromInventory( selected );
+            int result;
+            if (slot == ARM) result = player->chassis->addArm( selected );
+            else if (slot == MOUNT) result = player->chassis->addMount( selected );
+            else if (slot == SYSTEM) result = player->chassis->addSystem( selected );
+
+            if (result != 0)
+               addToInventory( selected );
+         }
+
+         game_state = EQUIP_SCREEN;
+      }
+
 
       return 0;
    }
@@ -598,8 +812,8 @@ int sendKeyToGame( Keyboard::Key k )
 
       if (k == Keyboard::E) {
          game_state = EQUIP_SCREEN;
-         selection = 0;
-         max_selection = player->chassis->getTotalSlots();
+         alt_selection = 0;
+         max_alt_selection = player->chassis->getTotalSlots();
          return 0;
       }
 
@@ -752,7 +966,14 @@ int displayGame()
    if (game_state == EQUIP_SCREEN) {
       Chassis *ch = player->chassis;
       if (ch) {
-         ch->drawEquipScreen( selection );
+         ch->drawEquipScreen( alt_selection );
+      }
+   }
+   else if (game_state == EQUIP_INVENTORY) {
+      Chassis *ch = player->chassis;
+      if (ch) {
+         ch->listEquipment( alt_selection );
+         drawLimitedInventory();
       }
    }
    else if (game_state == INVENTORY_SCREEN || game_state == INVENTORY_SELECT)

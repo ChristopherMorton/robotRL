@@ -9,7 +9,7 @@ enum ItemType {
    // Equipment
    CHASSIS,
    ARM,
-   MOUNTED,
+   MOUNT,
    SYSTEM,
    // Usable
    MISSILE,
@@ -98,6 +98,8 @@ struct Chassis : public Item
    Item* removeSystem( int number );
    Item* removeAny( int number );
 
+   ItemType getSlot( int number );
+
    void listEquipment( int selection );
    int getTotalSlots();
 
@@ -160,7 +162,13 @@ struct OrbChassis : public Chassis
 
 // Arms
 
-struct ClawArm : public Item, public MeleeWeapon
+struct Arm : public Item
+{
+   virtual int drawActions();
+   virtual int doAction( int selection );
+};
+
+struct ClawArm : public Arm, public MeleeWeapon
 {
    ClawArm();
    virtual int meleeAttack( Unit *target );

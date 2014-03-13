@@ -25,6 +25,10 @@ int displayGame();
 
 extern Level* current_level;
 
+struct Player;
+extern Player* player;
+
+int dropItem( Item *i );
 int dropFromInventory( Item *i );
 
 int moveUnit( Unit*, Direction );

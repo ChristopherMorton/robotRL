@@ -2,6 +2,8 @@
 #include "display.h"
 #include "log.h"
 #include "game.h"
+#include "syslog.h"
+#include "units.h"
 
 #include <sstream>
 
@@ -17,13 +19,12 @@ void Item::drawItem( int x, int y ) {
 
 int Item::drawActions()
 {
-   const int column = 33, header_column = 31, column_end = 57;
+   const int column = 33, header_column = 31;
    int row = 12;
-
-   num_actions = 1;
 
    writeString( "Actions:", Color::White, Color::Black, header_column, row );
    row++;
+
    writeString( "a) Drop", Color::White, Color::Black, column, row );
 
    return num_actions;
@@ -33,7 +34,7 @@ int Item::doAction( int selection )
 {
    if (selection != 0) return -1;
 
-   dropFromInventory( this );
+   dropItem( this );
    return 0;
 }
 
@@ -259,39 +260,48 @@ Item* Chassis::getAllNonWeapon()
 
 int Chassis::addArm( Item* arm )
 {
+   int retval = 0;
    if (arm == NULL) {
       log("Chassis can't add arm, arm is NULL");
-      return -2;
+      retval = -2;
    }
-   
-   if (arm->next != NULL) {
+   else if (arm->next != NULL) {
       log("Chassis can't add arm, arm has a next Item* attached");
-      return -3;
+      retval = -3;
    }
-
-   if (arm->type != ARM) {
+   else if (arm->type != ARM) {
       log("Chassis can't add arm, as it is not an arm item");
-      return -4;
-   }
-
-   if (arms == NULL && num_arms > 0) {
+      retval = -4;
+   } else if (arms == NULL && num_arms > 0) {
       arms = arm;
+      writeSystemLog( ">Equipped:" );
+      writeSystemLog( arm->getName() );
       return 0;
    }
-
-   int count = 1;
-   Item *cur = arms;
-   while( count < num_arms ) {
-      if (cur->next == NULL) { // Slot in here
-         cur->next = arm;
-         return 0;
+   else
+   { 
+      int count = 1;
+      Item *cur = arms;
+      while( count < num_arms ) {
+         if (cur->next == NULL) { // Slot in here
+            cur->next = arm;
+            writeSystemLog( ">Equipped:" );
+            writeSystemLog( arm->getName() );
+            return 0;
+         }
+         cur = cur->next;
+         count++;
       }
-      cur = cur->next;
-      count++;
+
+      // No space
+      log("Chassis can't add arm, no more arm slots");
+      retval = -1;
    }
-   // No space
-   log("Chassis can't add arm, no more arm slots");
-   return -1;
+
+   writeSystemLog( ">Unable to equip:" );
+   writeSystemLog( getName() );
+
+   return retval;
 }
 
 int Chassis::addMount( Item* mount )
@@ -306,7 +316,7 @@ int Chassis::addMount( Item* mount )
       return -3;
    }
 
-   if (mount->type != MOUNTED) {
+   if (mount->type != MOUNT) {
       log("Chassis can't add mount, as it is not a mounted item");
       return -4;
    }
@@ -495,6 +505,24 @@ Item* Chassis::removeAny( int number )
    number -= num_mounts;
 
    return removeSystem( number );
+}
+
+ItemType Chassis::getSlot( int number )
+{
+   if (number < 0 || number >= getTotalSlots())
+      return CHASSIS;
+
+   if (number < num_arms)
+      return ARM;
+
+   number -= num_arms;
+
+   if (number < num_mounts)
+      return MOUNT;
+
+   number -= num_mounts;
+
+   return SYSTEM;
 }
 
 int Chassis::getTotalSlots()
@@ -927,8 +955,8 @@ OrbChassis::OrbChassis()
    mounts = NULL;
    systems = NULL;
 
-   num_arms = 2;
-   num_mounts = 4;
+   num_arms = 6;
+   num_mounts = 0;
    num_systems = 7;
 
    num_actions = 1;
@@ -943,34 +971,34 @@ std::string OrbChassis::getName() {
 void OrbChassis::drawDescription()
 {
    writeString( getName(), Color::White, Color::Black, 32, 2 );
-   writeString( "A levitating orb with dual", Color::White, Color::Black, 32, 4);
-   writeString( "arm sockets and several heavy", Color::White, Color::Black, 32, 5);
-   writeString( "mounts. Mobile and powerful,", Color::White, Color::Black, 32, 6);
-   writeString( "but with high energy costs.", Color::White, Color::Black, 32, 7);
+   writeString( "A levitating orb with six", Color::White, Color::Black, 32, 4);
+   writeString( "heavy-duty arm sockets.", Color::White, Color::Black, 32, 5);
+   writeString( "Extremely mobile, but", Color::White, Color::Black, 32, 6);
+   writeString( "with high energy costs.", Color::White, Color::Black, 32, 7);
 
    drawChassisStats( 9 );
 }
 
 void OrbChassis::drawEquipScreen( int selection )
 {
-   writeString("                              ", Color::White, Color::Black, 0, 2);
+   writeString("         Orb Chassis          ", Color::White, Color::Black, 0, 2);
    writeString("                              ", Color::White, Color::Black, 0, 3);
    writeString("                              ", Color::White, Color::Black, 0, 4);
    writeString("                              ", Color::White, Color::Black, 0, 5);
    writeString("                              ", Color::White, Color::Black, 0, 6);
-   writeString("                              ", Color::White, Color::Black, 0, 7);
-   writeString("                              ", Color::White, Color::Black, 0, 8);
-   writeString("                              ", Color::White, Color::Black, 0, 9);
-   writeString("                              ", Color::White, Color::Black, 0, 10);
-   writeString("                              ", Color::White, Color::Black, 0, 11);
-   writeString("                              ", Color::White, Color::Black, 0, 12);
-   writeString("                              ", Color::White, Color::Black, 0, 13);
-   writeString("                              ", Color::White, Color::Black, 0, 14);
-   writeString("                              ", Color::White, Color::Black, 0, 15);
-   writeString("                              ", Color::White, Color::Black, 0, 16);
-   writeString("                              ", Color::White, Color::Black, 0, 17);
-   writeString("                              ", Color::White, Color::Black, 0, 18);
-   writeString("                              ", Color::White, Color::Black, 0, 19);
+   writeString("       +++         +++        ", Color::White, Color::Black, 0, 7);
+   writeString("       \\  \\       /  /        ", Color::White, Color::Black, 0, 8);
+   writeString("        \\  \\     /  /         ", Color::White, Color::Black, 0, 9);
+   writeString("         \\  \\---/  /          ", Color::White, Color::Black, 0, 10);
+   writeString("          \\/     \\/           ", Color::White, Color::Black, 0, 11);
+   writeString("     +----|       |----+      ", Color::White, Color::Black, 0, 12);
+   writeString("     +    |  (O)  |    +      ", Color::White, Color::Black, 0, 13);
+   writeString("     +----|       |----+      ", Color::White, Color::Black, 0, 14);
+   writeString("          /\\     /\\           ", Color::White, Color::Black, 0, 15);
+   writeString("         /  /---\\  \\          ", Color::White, Color::Black, 0, 16);
+   writeString("        /  /     \\  \\         ", Color::White, Color::Black, 0, 17);
+   writeString("       /  /       \\  \\        ", Color::White, Color::Black, 0, 18);
+   writeString("       +++         +++        ", Color::White, Color::Black, 0, 19);
    writeString("                              ", Color::White, Color::Black, 0, 20);
    writeString("                              ", Color::White, Color::Black, 0, 21);
    writeString("                              ", Color::White, Color::Black, 0, 22);
@@ -987,6 +1015,38 @@ void OrbChassis::drawEquipScreen( int selection )
 // Arms
 //////////////////////////////////////////////////////////////////////
 
+int Arm::drawActions()
+{
+   const int column = 33, header_column = 31;
+   int row = 12;
+
+   writeString( "Actions:", Color::White, Color::Black, header_column, row );
+   row++;
+
+   writeString( "a) Drop", Color::White, Color::Black, column, row );
+   row++;
+   writeString( "b) Equip (Arm)", Color::White, Color::Black, column, row );
+
+   return num_actions;
+}
+
+
+int Arm::doAction( int selection )
+{
+   if (selection == 0)
+      dropItem( this );
+   else if (selection == 1) {
+      Chassis* ch = player->chassis;
+      if (ch) {
+         if (ch->addArm( this ) != 0)
+            return -1;
+      }
+   }
+   else
+      return -1;
+
+   return 0;
+}
 
 ClawArm::ClawArm()
 {
@@ -994,6 +1054,8 @@ ClawArm::ClawArm()
    weapon_type = MELEE_WEAPON;
    alt_next = NULL;
    next = NULL;
+
+   num_actions = 2;
 
    display_char = '(';
 }
