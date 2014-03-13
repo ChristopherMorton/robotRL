@@ -295,7 +295,7 @@ int Chassis::addArm( Item* arm )
       }
 
       // No space
-      writeSystemLog( ">ERROR - CANNOT EQUIP:" );
+      writeSystemLog( ">ERROR CANNOT EQUIP:" );
       writeSystemLog( arm->getName() );
       writeSystemLog( "ARM SLOTS AT CAPACITY" );
       retval = -1;

@@ -40,6 +40,7 @@ enum GameState
    INVENTORY_SELECT,
    EQUIP_SCREEN,
    EQUIP_INVENTORY,
+   PICK_UP,
    HELP_SCREEN
 };
 
@@ -67,6 +68,11 @@ void writeSystemLog( std::string text )
 
    if (system_log.size() > system_log_memory)
       system_log.pop_back();
+}
+
+void clearSystemLog()
+{
+   system_log.clear();
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -338,7 +344,7 @@ int dropFromInventory( Item *i )
    return -2;
 }
 
-int invSelectionDown()
+int selectionDown()
 {
    ++selection;
    if (selection == max_selection) {
@@ -351,7 +357,7 @@ int invSelectionDown()
    return 0;
 }
 
-int invSelectionUp()
+int selectionUp()
 {
    --selection;
    if (selection == -1) {
@@ -364,7 +370,7 @@ int invSelectionUp()
    return 0;
 }
 
-int invSelectionPageDown()
+int selectionPageDown()
 {
    int old = selection;
    selection += invPageSize;
@@ -375,7 +381,7 @@ int invSelectionPageDown()
    return 0;
 }
 
-int invSelectionPageUp()
+int selectionPageUp()
 {
    int old = selection;
    selection -= invPageSize;
@@ -388,19 +394,22 @@ int invSelectionPageUp()
    return 0;
 }
 
-int drawInventory()
+int drawItemStack( Item *first, std::string header, bool alt=false, bool describe=true )
 {
    const int column = 4, header_column = 2, column_end = 23;
    int row = 1;
-   writeString( "Inventory:", C_WHITE, C_BLACK, header_column, row );
+   writeString( header, C_WHITE, C_BLACK, header_column, row );
    row++;
 
-   Item* i = player->inventory;
+   Item* i = first;
 
    int count = 0; 
    while (count < menu_scroll && i != NULL) {
       count++;
-      i = i->next;
+      if (alt)
+         i = i->alt_next;
+      else
+         i = i->next;
    }
 
    char alpha = 'a';
@@ -412,18 +421,28 @@ int drawInventory()
       writeString( i->getName(), C_WHITE, C_BLACK, column, row );
       if (count == selection) {
          colorInvert( column, row, column_end, row );
-         i->drawDescription();
-         if (game_state == INVENTORY_SELECT) {
-            i->drawActions();
-            colorInvert( actions_column, 13+alt_selection, actions_column+19, 13+alt_selection );
+         if (describe) {
+            i->drawDescription();
+            if (game_state == INVENTORY_SELECT) {
+               i->drawActions();
+               colorInvert( actions_column, 13+alt_selection, actions_column+19, 13+alt_selection );
+            }
          }
       }
 
       row++;
       count++;
-      i = i->next;
+      if (alt)
+         i = i->alt_next;
+      else
+         i = i->next;
    }
    return 0;
+}
+
+int drawInventory()
+{
+   return drawItemStack( player->inventory, "Inventory:" );
 }
 
 Item *invSelectedItem()
@@ -577,36 +596,68 @@ Item *limitedInvSelectedItem()
    return NULL;
 }
 
-void drawLimitedInventory()
+int drawLimitedInventory()
 {
-   const int column = 4, header_column = 2, column_end = 23;
-   int row = 1;
-   writeString( "Limited Inventory:", C_WHITE, C_BLACK, header_column, row );
-   row++;
+   return drawItemStack( limited_inventory, "Limited Inventory:", true, false );
+}
 
-   Item* i = limited_inventory;
+// Another set of Item manipulations, for a generic stack
 
-   int count = 0; 
-   while (count < menu_scroll && i != NULL) {
-      count++;
-      i = i->alt_next;
+Item *item_stack = NULL, *stack_selected_prev = NULL;
+
+Item* stackRemoveSelected()
+{
+   Item *i = item_stack;
+   int count = 0;
+   if (selection == 0 && i != NULL) {
+      item_stack = i->next;
+      i->next = NULL;
+      return i;
    }
+   
+   stack_selected_prev = i;
+   count++;
+   i = i->next;
 
-   char alpha = 'a';
-   while (i != NULL && row < 28) {
-      writeChar( alpha, C_GRAY, C_BLACK, 2, row );
-      writeChar( ')', C_GRAY, C_BLACK, 3, row );
-      alpha++;
-
-      writeString( i->getName(), C_WHITE, C_BLACK, column, row );
+   while (i != NULL) {
       if (count == selection) {
-         colorInvert( column, row, column_end, row );
+         stack_selected_prev->next = i->next;
+         i->next = NULL;
+         return i;
       }
 
-      row++;
+      stack_selected_prev = i;
       count++;
-      i = i->alt_next;
+      i = i->next;
    }
+   return NULL;
+}
+
+void stackReplaceSelected( Item *i )
+{
+   if (selection == 0) {
+      i->next = item_stack;
+      item_stack = i;
+      return;
+   }
+   if (stack_selected_prev == NULL) {
+      Item *i = item_stack;
+      int count = 0;
+      while (i != NULL) {
+         if (count == selection - 1) {
+            stack_selected_prev = i;
+            break;
+         }
+
+         count++;
+         i = i->next;
+      }
+   }
+
+   i->next = stack_selected_prev->next;
+   stack_selected_prev->next = i;
+
+   stack_selected_prev = NULL;
 }
 
 // Interacting with the environment
@@ -701,6 +752,7 @@ void testLevel()
    addUnitToQueue( rr, 500 );
 
    game_state = ON_MAP;
+   clearSystemLog();
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -811,22 +863,54 @@ int sendKeyToGame( Keyboard::Key k, int mod )
    
    if (game_state == SELECTING_ABILITY) {
 
+      return 0;
+   }
+   
+   if (game_state == PICK_UP) {
+      if (k == Keyboard::Escape || k == Keyboard::BackSpace) {
+         current_level->map[player->pos_y][player->pos_x].items = item_stack;
+         game_state = ON_MAP;
+      } else
+      if (k == Keyboard::Numpad2 || k == Keyboard::Down) {
+         selectionDown(); } else
+      if (k == Keyboard::Numpad8 || k == Keyboard::Up) {
+         selectionUp(); } else
+      if (k == Keyboard::PageDown) {
+         selectionPageDown(); } else
+      if (k == Keyboard::PageUp) {
+         selectionPageUp(); } else
+      if (k == Keyboard::Space || k == Keyboard::Return) {
+         Item *selected = stackRemoveSelected();
+         if (selected != NULL) {
+            selected->next = NULL;
+            addToInventory( selected );
+            max_selection--;
+            if (selection == max_selection) selection--;
+            writeSystemLog( selected->getName() );
+         }
+         if (item_stack == NULL) {
+            current_level->map[player->pos_y][player->pos_x].items = item_stack;
+            game_state = ON_MAP;
+         }
+      }
+
+      return 0;
    }
    
    if (game_state == INVENTORY_SCREEN) {
       if (alphaSelect( k, menu_scroll, false ))
          return 0;
 
-      if (k == Keyboard::I || k == Keyboard::Escape || k == Keyboard::BackSpace) {
+      if (k == Keyboard::Escape || k == Keyboard::BackSpace) {
          game_state = ON_MAP; } else
       if (k == Keyboard::Numpad2 || k == Keyboard::Down) {
-         invSelectionDown(); } else
+         selectionDown(); } else
       if (k == Keyboard::Numpad8 || k == Keyboard::Up) {
-         invSelectionUp(); } else
+         selectionUp(); } else
       if (k == Keyboard::PageDown) {
-         invSelectionPageDown(); } else
+         selectionPageDown(); } else
       if (k == Keyboard::PageUp) {
-         invSelectionPageUp(); } else
+         selectionPageUp(); } else
       if (k == Keyboard::Space || k == Keyboard::Return) {
          Item *selected = invSelectedItem();
          game_state = INVENTORY_SELECT;
@@ -895,13 +979,13 @@ int sendKeyToGame( Keyboard::Key k, int mod )
       if (k == Keyboard::Escape || k == Keyboard::BackSpace) {
          game_state = EQUIP_SCREEN; } else
       if (k == Keyboard::Numpad2 || k == Keyboard::Down) {
-         invSelectionDown(); } else
+         selectionDown(); } else
       if (k == Keyboard::Numpad8 || k == Keyboard::Up) {
-         invSelectionUp(); } else
+         selectionUp(); } else
       if (k == Keyboard::PageDown) {
-         invSelectionPageDown(); } else
+         selectionPageDown(); } else
       if (k == Keyboard::PageUp) {
-         invSelectionPageUp(); } else
+         selectionPageUp(); } else
       if (k == Keyboard::Space || k == Keyboard::Return) {
          Item *selected = limitedInvSelectedItem();
          if (selected != NULL) {
@@ -938,6 +1022,30 @@ int sendKeyToGame( Keyboard::Key k, int mod )
          selection = 0;
          max_selection = getInventorySize();
          menu_scroll = 0;
+         return 0;
+      }
+
+      if (k == Keyboard::Comma) {
+         Location &player_loc = current_level->map[player->pos_y][player->pos_x];
+         if (player_loc.items == NULL)
+            return 0;
+
+         writeSystemLog( ">Picked up:" );
+
+         if (player_loc.items->next == NULL) { // Pick up the one item
+            addToInventory( player_loc.items );
+            writeSystemLog( player_loc.items->getName() );
+            player_loc.items = NULL;
+            return 0;
+         }
+
+         // Otherwise
+         selection = 0;
+         max_selection = 0;
+         Item *i = item_stack = player_loc.items;
+         stack_selected_prev = NULL;
+         while (i != NULL) { i = i->next; ++max_selection; }
+         game_state = PICK_UP;
          return 0;
       }
 
@@ -1099,10 +1207,16 @@ int displayGame()
    }
    else
    {
+      int x_start = 0;
+
+      if (game_state == PICK_UP) {
+         x_start = 25;
+         drawItemStack( item_stack, "Pick up:", false, false );
+      }
 
       doFOV();
 
-      for (int x = 0; x < 55; x++) {
+      for (int x = x_start; x < 55; x++) {
          for (int y = 0; y < 28; y++) {
 
             int map_x = x + map_view_base.x, map_y = y + map_view_base.y;
@@ -1114,7 +1228,7 @@ int displayGame()
             if (visibility == 0)
                continue;
 
-            Location l = current_level->map[map_y][map_x];
+            Location &l = current_level->map[map_y][map_x];
 
             if (l.unit != NULL && visibility & MAP_VISIBLE) {
                l.unit->drawUnit(x, y);
