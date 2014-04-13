@@ -28,9 +28,12 @@ extern Level* current_level;
 struct Player;
 extern Player* player;
 
+extern unsigned long int ticks; // 'ticks' since game started
+
 int dropItem( Item *i );
 int dropFromInventory( Item *i );
 
 int moveUnit( Unit*, Direction );
+int destroyUnit( Unit* target );
 
 #endif

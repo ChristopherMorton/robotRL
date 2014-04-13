@@ -29,34 +29,49 @@ enum WeaponType {
    NOT_A_WEAPON
 };
 
+// Flag values
+
+#define MELEE_PIERCING 0x4
+#define MELEE_DISABLING 0x8
+#define MELEE_TARGET_CHASSIS 0x40
+
+#define RANGED_DISABLING 0x8
+#define RANGED_TARGET_CHASSIS 0x40
+
+#define TARGET_CHASSIS 0x1
+
 struct Item {
    ItemType type;
    WeaponType weapon_type;
    unsigned int display_char;
 
    int durability, max_durability;
+   int armor;
+   int rearm_time;
+   bool targetted;
    
    Item *next, *alt_next;
+
+   void initBasics();
 
    void drawItem( int x, int y );
 
    virtual std::string getName() = 0;
+   std::string getNamePadded( int num=1, char pad=' ' );
 
    virtual void drawDescription();
 
    int num_actions;
    virtual int drawActions();
    virtual int doAction( int selection );
-};
 
-struct MeleeWeapon
-{
-   virtual int meleeAttack( Unit *target ) = 0;
-};
+   virtual int meleeAttack( Unit *target );
+   int genericMeleeAttack( Unit *target, int base_dmg, int dmg_variation, int flags=0 );
 
-struct RangedWeapon
-{
-   virtual int rangedAttack( Unit *target ) = 0;
+   virtual int rangedAttack( Unit *target );
+   int genericRangedAttack( Unit *target, int base_dmg, int dmg_variation, int flags );
+
+   virtual ~Item();
 };
 
 // Chasses
@@ -77,8 +92,6 @@ struct Chassis : public Item
 
    ChassisType c_type;
 
-   int durability, max_durability;
-
    virtual std::string getName() = 0;
    virtual void drawEquipScreen( int selection ) = 0;
 
@@ -98,12 +111,18 @@ struct Chassis : public Item
    Item* removeSystem( int number );
    Item* removeAny( int number );
 
+   void findAndRemoveItem( Item *to_remove );
+
    ItemType getSlot( int number );
 
    void listEquipment( int selection );
    int getTotalSlots();
 
    void drawChassisStats( int row );
+
+   Item *selectRandomItem( int flags = 0 );
+
+   virtual ~Chassis();
 };
 
 struct BasicChassis : public Chassis
@@ -113,6 +132,8 @@ struct BasicChassis : public Chassis
    virtual std::string getName();
 
    virtual void drawDescription();
+
+   virtual ~BasicChassis();
 };
 
 struct QuadChassis : public Chassis
@@ -122,6 +143,8 @@ struct QuadChassis : public Chassis
    virtual std::string getName();
 
    virtual void drawDescription();
+
+   virtual ~QuadChassis();
 };
 
 struct DomeChassis : public Chassis
@@ -131,6 +154,8 @@ struct DomeChassis : public Chassis
    virtual std::string getName();
 
    virtual void drawDescription();
+
+   virtual ~DomeChassis();
 };
 
 struct CritterChassis : public Chassis
@@ -140,6 +165,8 @@ struct CritterChassis : public Chassis
    virtual std::string getName();
 
    virtual void drawDescription();
+
+   virtual ~CritterChassis();
 };
 
 struct HeavyChassis : public Chassis
@@ -149,6 +176,8 @@ struct HeavyChassis : public Chassis
    virtual std::string getName();
 
    virtual void drawDescription();
+
+   virtual ~HeavyChassis();
 };
 
 struct OrbChassis : public Chassis
@@ -158,6 +187,8 @@ struct OrbChassis : public Chassis
    virtual std::string getName();
 
    virtual void drawDescription();
+
+   virtual ~OrbChassis();
 };
 
 // Arms
@@ -166,42 +197,52 @@ struct Arm : public Item
 {
    virtual int drawActions();
    virtual int doAction( int selection );
+
+   virtual ~Arm();
 };
 
-struct ClawArm : public Arm, public MeleeWeapon
+struct ClawArm : public Arm
 {
    ClawArm();
    virtual int meleeAttack( Unit *target );
    virtual std::string getName();
 
    virtual void drawDescription();
+
+   virtual ~ClawArm();
 };
 
-struct HammerArm : public Arm, public MeleeWeapon
+struct HammerArm : public Arm
 {
    HammerArm();
    virtual int meleeAttack( Unit *target );
    virtual std::string getName();
 
    virtual void drawDescription();
+
+   virtual ~HammerArm();
 };
 
-struct ShockArm : public Arm, public MeleeWeapon
+struct ShockArm : public Arm
 {
    ShockArm();
    virtual int meleeAttack( Unit *target );
    virtual std::string getName();
 
    virtual void drawDescription();
+
+   virtual ~ShockArm();
 };
 
-struct EnergyLance : public Arm, public MeleeWeapon
+struct EnergyLance : public Arm
 {
    EnergyLance();
    virtual int meleeAttack( Unit *target );
    virtual std::string getName();
 
    virtual void drawDescription();
+
+   virtual ~EnergyLance();
 };
 
 // Mounted items
@@ -210,15 +251,19 @@ struct Mount : public Item
 {
    virtual int drawActions();
    virtual int doAction( int selection );
+
+   virtual ~Mount();
 };
 
-struct Laser : public Mount, public RangedWeapon
+struct Laser : public Mount
 {
    Laser();
    virtual int rangedAttack( Unit *target );
    virtual std::string getName();
 
    virtual void drawDescription();
+
+   virtual ~Laser();
 };
 
 #endif

@@ -10,6 +10,14 @@
 
 using namespace sf;
 
+void Item::initBasics() {
+   weapon_type = NOT_A_WEAPON;
+   rearm_time = 0;
+   targetted = false;
+   alt_next = NULL;
+   next = NULL;
+}
+
 void Item::drawItem( int x, int y ) {
    writeChar( display_char, C_WHITE, C_BLACK, x, y );
 }
@@ -44,6 +52,168 @@ void Item::drawDescription()
    writeString( getName(), C_WHITE, C_BLACK, desc_col, 2 );
 }
 
+int Item::meleeAttack( Unit *target )
+{
+   // By default, can't melee attack 
+   return -1;
+}
+
+int Item::genericMeleeAttack( Unit *target, int dmg_base, int dmg_variation, int flags )
+{
+   if (target == NULL) {
+      log("Tried to attack a NULL target");
+      return -1;
+   }
+
+   writeSystemLog( getNamePadded( 1, '-' ) );
+
+   if ( rearm_time > ticks ) {
+      writeSystemLog( " is disabled." );
+
+      return 0;
+   }
+
+   if ((rand() % 4) == 3) {
+      writeSystemLog( " fails to connect." );
+      return 0;
+   }
+
+   Item *item_target;
+   if (flags & MELEE_TARGET_CHASSIS)
+      item_target = target->chassis->selectRandomItem( TARGET_CHASSIS );
+   else
+      item_target = target->chassis->selectRandomItem();
+
+   int damage = dmg_base + (rand() % dmg_variation);
+
+   if (!( flags & MELEE_PIERCING ))
+      damage -= item_target->armor;
+
+   item_target->durability -= damage;
+
+   if (item_target->durability <= 0) {
+
+      if ( flags & MELEE_PIERCING )
+         writeSystemLog( " pierces and destroys" );
+      else
+         writeSystemLog( " hits and destroys" );
+
+
+      writeSystemLog( item_target->getNamePadded() );
+      if (item_target == target->chassis) {
+         // target destroyed
+         destroyUnit( target );
+         return 1;
+      }
+      else
+      {
+         target->destroyEquipment( item_target );
+      }
+   }
+   else
+   {
+      if ( flags & MELEE_DISABLING ) {
+         if ( flags & MELEE_PIERCING )
+            writeSystemLog( " pierces and disables" );
+         else
+            writeSystemLog( " hits and disables" );
+
+         item_target->rearm_time = ticks + 3000;
+      }
+      else
+      {
+         if ( flags & MELEE_PIERCING )
+            writeSystemLog( " pierces and damages" );
+         else
+            writeSystemLog( " hits and damages" );
+      }
+
+      writeSystemLog( item_target->getNamePadded() );
+   }
+
+   return 0;
+}
+
+int Item::rangedAttack( Unit *target )
+{
+   // By default, can't ranged attack 
+   return -1;
+}
+
+int Item::genericRangedAttack( Unit *target, int dmg_base, int dmg_variation, int flags )
+{
+   if (target == NULL) {
+      log("Tried to shoot a NULL target");
+      return -1;
+   }
+
+   writeSystemLog( getNamePadded( 1, '>' ) );
+
+   if ( rearm_time > ticks ) {
+      writeSystemLog( " cannot fire yet." );
+
+      return 0;
+   }
+
+   if ((rand() % 4) == 3) {
+      writeSystemLog( " misses." );
+      return 0;
+   }
+
+   Item *item_target;
+   if (flags & RANGED_TARGET_CHASSIS)
+      item_target = target->chassis->selectRandomItem( TARGET_CHASSIS );
+   else
+      item_target = target->chassis->selectRandomItem();
+
+   int damage = dmg_base + (rand() % dmg_variation);
+   damage -= item_target->armor;
+
+   item_target->durability -= damage;
+
+   if (item_target->durability <= 0) {
+
+      writeSystemLog( " shoots and destroys" );
+
+
+      writeSystemLog( item_target->getNamePadded() );
+      if (item_target == target->chassis) {
+         // target destroyed
+         destroyUnit( target );
+         return 1;
+      }
+      else
+      {
+         target->destroyEquipment( item_target );
+      }
+   }
+   else
+   {
+      if ( flags & RANGED_DISABLING ) {
+         writeSystemLog( " shoots and disables" );
+
+         item_target->rearm_time = ticks + 3000;
+      }
+      else
+      {
+         writeSystemLog( " shoots and damages" );
+      }
+
+      writeSystemLog( item_target->getNamePadded() );
+   }
+
+   return 0;
+}
+
+std::string Item::getNamePadded( int num, char pad )
+{
+   std::string padding( num, pad );
+   return padding + getName();
+}
+
+Item::~Item()
+{ }
+
 //////////////////////////////////////////////////////////////////////
 // Chassis
 //////////////////////////////////////////////////////////////////////
@@ -61,32 +231,49 @@ Item* Chassis::removeAll()
 
 Item* Chassis::getAllItems()
 {
-   Item *stack = NULL, *stack_last = NULL;
+   Item *alt_stack = NULL, *alt_stack_last = NULL;
+   Item *stack = NULL;
 
    if (arms != NULL) {
-      stack = stack_last = arms;
-
-      while (stack_last->next != NULL) stack_last = stack_last->next;
+      stack = arms;
+      while (stack != NULL) {
+         if (alt_stack == NULL)
+            alt_stack = alt_stack_last = stack;
+         else {
+            alt_stack_last->alt_next = stack;
+            alt_stack_last = stack;
+         }
+         stack = stack->next;
+      }
    }
 
    if (mounts != NULL) {
-      if (stack == NULL)
-         stack = stack_last = mounts;
-      else
-         stack_last->next = mounts;
-
-      while (stack_last->next != NULL) stack_last = stack_last->next;
+      stack = mounts;
+      while (stack != NULL) {
+         if (alt_stack == NULL)
+            alt_stack = alt_stack_last = stack;
+         else {
+            alt_stack_last->alt_next = stack;
+            alt_stack_last = stack;
+         }
+         stack = stack->next;
+      }
    }
 
    if (systems != NULL) {
-      if (stack == NULL)
-         stack = stack_last = systems;
-      else
-         stack_last->next = systems;
-
-      while (stack_last->next != NULL) stack_last = stack_last->next;
+      stack = systems;
+      while (stack != NULL) {
+         if (alt_stack == NULL)
+            alt_stack = alt_stack_last = stack;
+         else {
+            alt_stack_last->alt_next = stack;
+            alt_stack_last = stack;
+         }
+         stack = stack->next;
+      }
    }
-   return stack;
+
+   return alt_stack;
 }
 
 Item* Chassis::getAllMelee()
@@ -110,6 +297,9 @@ Item* Chassis::getAllMelee()
          next_item = next_item->next;
       }
    }
+
+   if (alt_stack_end != NULL)
+      alt_stack_end->alt_next = NULL;
 
    return alt_stack;
 }
@@ -149,6 +339,9 @@ Item* Chassis::getAllRanged()
          next_item = next_item->next;
       }
    }
+
+   if (alt_stack_end != NULL)
+      alt_stack_end->alt_next = NULL;
 
    return alt_stack;
 }
@@ -203,6 +396,9 @@ Item* Chassis::getAllTactical()
       }
    }
 
+   if (alt_stack_end != NULL)
+      alt_stack_end->alt_next = NULL;
+
    return alt_stack;
 }
 
@@ -256,6 +452,9 @@ Item* Chassis::getAllNonWeapon()
       }
    }
 
+   if (alt_stack_end != NULL)
+      alt_stack_end->alt_next = NULL;
+
    return alt_stack;
 }
 
@@ -276,7 +475,7 @@ int Chassis::addArm( Item* arm )
    } else if (arms == NULL && num_arms > 0) {
       arms = arm;
       writeSystemLog( ">Equipped:" );
-      writeSystemLog( arm->getName() );
+      writeSystemLog( arm->getNamePadded() );
       return 0;
    }
    else
@@ -287,7 +486,7 @@ int Chassis::addArm( Item* arm )
          if (cur->next == NULL) { // Slot in here
             cur->next = arm;
             writeSystemLog( ">Equipped:" );
-            writeSystemLog( arm->getName() );
+            writeSystemLog( arm->getNamePadded() );
             return 0;
          }
          cur = cur->next;
@@ -295,9 +494,9 @@ int Chassis::addArm( Item* arm )
       }
 
       // No space
-      writeSystemLog( ">ERROR CANNOT EQUIP:" );
-      writeSystemLog( arm->getName() );
-      writeSystemLog( "ARM SLOTS AT CAPACITY" );
+      writeSystemLog( ">ERROR: CANNOT EQUIP" );
+      writeSystemLog( arm->getNamePadded() );
+      writeSystemLog( " ARM SLOTS AT CAPACITY" );
       retval = -1;
    }
 
@@ -321,7 +520,7 @@ int Chassis::addMount( Item* mount )
    } else if (mounts == NULL && num_mounts > 0) {
       mounts = mount;
       writeSystemLog( ">Equipped:" );
-      writeSystemLog( mount->getName() );
+      writeSystemLog( mount->getNamePadded() );
       return 0;
    }
    else
@@ -332,7 +531,7 @@ int Chassis::addMount( Item* mount )
          if (cur->next == NULL) { // Slot in here
             cur->next = mount;
             writeSystemLog( ">Equipped:" );
-            writeSystemLog( mount->getName() );
+            writeSystemLog( mount->getNamePadded() );
             return 0;
          }
          cur = cur->next;
@@ -345,7 +544,7 @@ int Chassis::addMount( Item* mount )
    }
 
    writeSystemLog( ">Unable to equip:" );
-   writeSystemLog( mount->getName() );
+   writeSystemLog( mount->getNamePadded() );
 
    return retval;
 }
@@ -367,7 +566,7 @@ int Chassis::addSystem( Item* system )
    } else if (systems == NULL && num_systems > 0) {
       systems = system;
       writeSystemLog( ">Equipped:" );
-      writeSystemLog( system->getName() );
+      writeSystemLog( system->getNamePadded() );
       return 0;
    }
    else
@@ -378,7 +577,7 @@ int Chassis::addSystem( Item* system )
          if (cur->next == NULL) { // Slot in here
             cur->next = system;
             writeSystemLog( ">Equipped:" );
-            writeSystemLog( system->getName() );
+            writeSystemLog( system->getNamePadded() );
             return 0;
          }
          cur = cur->next;
@@ -391,7 +590,7 @@ int Chassis::addSystem( Item* system )
    }
 
    writeSystemLog( ">Unable to equip:" );
-   writeSystemLog( system->getName() );
+   writeSystemLog( system->getNamePadded() );
 
    return retval;
 }
@@ -524,6 +723,20 @@ Item* Chassis::removeAny( int number )
    return removeSystem( number );
 }
 
+void Chassis::findAndRemoveItem( Item *to_remove )
+{
+   Item *all_items = getAllItems();
+   int count = 0;
+
+   while (all_items != NULL) {
+      if (all_items == to_remove)
+         removeAny( count );
+
+      all_items = all_items->alt_next;
+      count++;
+   }
+}
+
 ItemType Chassis::getSlot( int number )
 {
    if (number < 0 || number >= getTotalSlots())
@@ -609,6 +822,33 @@ void Chassis::listEquipment( int selection )
    }
 }
 
+Item *Chassis::selectRandomItem( int flags )
+{
+   Item *alt_stack = getAllItems();
+   Item *it = alt_stack;
+
+   int count = 0;
+   while (it != NULL){
+      count++;
+      it = it->alt_next;
+   }
+
+   if (flags && TARGET_CHASSIS)
+      count += 3;
+
+   int r = rand() % (count + 1);
+
+   if (r == 0) return this;
+
+   count = 1;
+   while (count < r) {
+      alt_stack = alt_stack->alt_next;
+      count++;
+   }
+
+   return alt_stack;
+}
+
 void Chassis::drawChassisStats( int row )
 {
    std::stringstream dur_str;
@@ -617,6 +857,9 @@ void Chassis::drawChassisStats( int row )
    writeString( dur_str.str(), C_WHITE, C_BLACK, 34, row );
 }
 
+Chassis::~Chassis()
+{ }
+
 //////////////////////////////////////////////////////////////////////
 // Specific Chassises
 //////////////////////////////////////////////////////////////////////
@@ -624,10 +867,9 @@ void Chassis::drawChassisStats( int row )
 
 BasicChassis::BasicChassis()
 {
+   initBasics();
+
    type = CHASSIS;
-   weapon_type = NOT_A_WEAPON;
-   alt_next = NULL;
-   next = NULL;
 
    display_char = '&';
    arms = NULL;
@@ -641,6 +883,8 @@ BasicChassis::BasicChassis()
    num_actions = 1;
 
    durability = max_durability = 100;
+   armor = 5;
+   rearm_time = 0;
 }
 
 std::string BasicChassis::getName() {
@@ -688,12 +932,13 @@ void BasicChassis::drawEquipScreen( int selection )
    listEquipment( selection );
 }
 
+BasicChassis::~BasicChassis() { }
+
 QuadChassis::QuadChassis()
 {
+   initBasics();
+
    type = CHASSIS;
-   weapon_type = NOT_A_WEAPON;
-   alt_next = NULL;
-   next = NULL;
 
    display_char = '&';
    arms = NULL;
@@ -707,6 +952,8 @@ QuadChassis::QuadChassis()
    num_actions = 1;
 
    durability = max_durability = 120;
+   armor = 5;
+   rearm_time = 0;
 }
 
 std::string QuadChassis::getName() {
@@ -756,12 +1003,13 @@ void QuadChassis::drawEquipScreen( int selection )
 
 }
 
+QuadChassis::~QuadChassis() { }
+
 DomeChassis::DomeChassis()
 {
+   initBasics();
+
    type = CHASSIS;
-   weapon_type = NOT_A_WEAPON;
-   alt_next = NULL;
-   next = NULL;
 
    display_char = '&';
    arms = NULL;
@@ -775,6 +1023,8 @@ DomeChassis::DomeChassis()
    num_actions = 1;
 
    durability = max_durability = 300;
+   armor = 5;
+   rearm_time = 0;
 }
 
 std::string DomeChassis::getName() {
@@ -824,12 +1074,13 @@ void DomeChassis::drawEquipScreen( int selection )
 
 }
 
+DomeChassis::~DomeChassis() { }
+
 CritterChassis::CritterChassis()
 {
+   initBasics();
+
    type = CHASSIS;
-   weapon_type = NOT_A_WEAPON;
-   alt_next = NULL;
-   next = NULL;
 
    display_char = '&';
    arms = NULL;
@@ -843,6 +1094,8 @@ CritterChassis::CritterChassis()
    num_actions = 1;
 
    durability = max_durability = 180;
+   armor = 5;
+   rearm_time = 0;
 }
 
 std::string CritterChassis::getName() {
@@ -891,17 +1144,16 @@ void CritterChassis::drawEquipScreen( int selection )
 
 }
 
+CritterChassis::~CritterChassis() { }
+
 HeavyChassis::HeavyChassis()
 {
+   initBasics();
+
    type = CHASSIS;
-   weapon_type = NOT_A_WEAPON;
-   alt_next = NULL;
-   next = NULL;
 
    display_char = '&';
    arms = NULL;
-   mounts = NULL;
-   systems = NULL;
 
    num_arms = 4;
    num_mounts = 6;
@@ -910,6 +1162,7 @@ HeavyChassis::HeavyChassis()
    num_actions = 1;
 
    durability = max_durability = 700;
+   armor = 5;
 }
 
 std::string HeavyChassis::getName() {
@@ -959,12 +1212,14 @@ void HeavyChassis::drawEquipScreen( int selection )
 
 }
 
+HeavyChassis::~HeavyChassis() { }
+
 OrbChassis::OrbChassis()
 {
+   initBasics();
+
    type = CHASSIS;
    weapon_type = NOT_A_WEAPON;
-   alt_next = NULL;
-   next = NULL;
 
    display_char = '&';
    arms = NULL;
@@ -978,6 +1233,8 @@ OrbChassis::OrbChassis()
    num_actions = 1;
 
    durability = max_durability = 420;
+   armor = 5;
+   rearm_time = 0;
 }
 
 std::string OrbChassis::getName() {
@@ -1027,6 +1284,8 @@ void OrbChassis::drawEquipScreen( int selection )
    listEquipment( selection );
 }
 
+OrbChassis::~OrbChassis() { }
+
 //////////////////////////////////////////////////////////////////////
 // Arms
 //////////////////////////////////////////////////////////////////////
@@ -1065,21 +1324,27 @@ int Arm::doAction( int selection )
    return 0;
 }
 
+Arm::~Arm() { }
+
 ClawArm::ClawArm()
 {
+   initBasics();
+
    type = ARM;
    weapon_type = MELEE_WEAPON;
-   alt_next = NULL;
-   next = NULL;
 
    num_actions = 2;
 
    display_char = '(';
+
+   durability = max_durability = 120;
+   armor = 5;
+   rearm_time = 0;
 }
 
 int ClawArm::meleeAttack( Unit *target )
 {
-   return 0;
+   return genericMeleeAttack( target, 30, 10 );
 }
 
 std::string ClawArm::getName()
@@ -1094,21 +1359,27 @@ void ClawArm::drawDescription()
    writeString( "in a gripping claw.", C_WHITE, C_BLACK, desc_col, 5);
 }
 
+ClawArm::~ClawArm() { }
+
 HammerArm::HammerArm()
 {
+   initBasics();
+
    type = ARM;
    weapon_type = MELEE_WEAPON;
-   alt_next = NULL;
-   next = NULL;
 
    num_actions = 2;
 
    display_char = '(';
+
+   durability = max_durability = 200;
+   armor = 5;
+   rearm_time = 0;
 }
 
 int HammerArm::meleeAttack( Unit *target )
 {
-   return 0;
+   return genericMeleeAttack( target, 50, 10 );
 }
 
 std::string HammerArm::getName()
@@ -1122,21 +1393,27 @@ void HammerArm::drawDescription()
    writeString( "A massive pneumatic hammer.", C_WHITE, C_BLACK, desc_col, 4);
 }
 
+HammerArm::~HammerArm() { }
+
 ShockArm::ShockArm()
 {
+   initBasics();
+
    type = ARM;
    weapon_type = MELEE_WEAPON;
-   alt_next = NULL;
-   next = NULL;
 
    num_actions = 2;
 
    display_char = '(';
+
+   durability = max_durability = 100;
+   armor = 5;
+   rearm_time = 0;
 }
 
 int ShockArm::meleeAttack( Unit *target )
 {
-   return 0;
+   return genericMeleeAttack( target, 30, 15, MELEE_DISABLING );
 }
 
 std::string ShockArm::getName()
@@ -1151,21 +1428,28 @@ void ShockArm::drawDescription()
    writeString( "directly into the target.", C_WHITE, C_BLACK, desc_col, 5);
 }
 
+ShockArm::~ShockArm() { }
+
 EnergyLance::EnergyLance()
 {
+   initBasics();
+
    type = ARM;
    weapon_type = MELEE_WEAPON;
-   alt_next = NULL;
-   next = NULL;
 
    num_actions = 2;
 
    display_char = '(';
+
+   durability = max_durability = 50;
+   armor = 5;
+
+   rearm_time = 0;
 }
 
 int EnergyLance::meleeAttack( Unit *target )
 {
-   return 0;
+   return genericMeleeAttack( target, 40, 40, MELEE_PIERCING );
 }
 
 std::string EnergyLance::getName()
@@ -1179,6 +1463,8 @@ void EnergyLance::drawDescription()
    writeString( "Spears your target on a", C_WHITE, C_BLACK, desc_col, 4);
    writeString( "cone of destructive energy.", C_WHITE, C_BLACK, desc_col, 5);
 }
+
+EnergyLance::~EnergyLance() { }
 
 //////////////////////////////////////////////////////////////////////
 // Mounts
@@ -1228,20 +1514,29 @@ int Mount::doAction( int selection )
    return 0;
 }
 
+Mount::~Mount() { }
+
 Laser::Laser()
 {
+   initBasics();
+
    type = MOUNT;
    weapon_type = RANGED_WEAPON;
-   alt_next = NULL;
-   next = NULL;
 
    num_actions = 3;
 
    display_char = '}';
+
+   durability = max_durability = 60;
+   armor = 5;
+
+   rearm_time = 0;
+   targetted = true;
 }
 
 int Laser::rangedAttack( Unit *target )
 {
+   writeSystemLog( ">PEW PEW" );
    return 0;
 }
 
@@ -1257,3 +1552,5 @@ void Laser::drawDescription()
    writeString( "photons that can eat", C_WHITE, C_BLACK, desc_col, 5);
    writeString( "through any material.", C_WHITE, C_BLACK, desc_col, 6);
 }
+
+Laser::~Laser() { }

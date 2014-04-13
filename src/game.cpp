@@ -6,6 +6,7 @@
 #include "units.h"
 #include "log.h"
 #include "defs.h"
+#include "SFML_GlobalRenderWindow.hpp"
 
 #include <vector>
 #include <queue>
@@ -131,47 +132,87 @@ int putUnit( Unit* unit, int x, int y )
 {
    Location &old_l = current_level->map[unit->pos_y][unit->pos_x];
    Location &new_l = current_level->map[y][x];
-   if (new_l.unit == NULL && new_l.ter > IMPASSABLE_WALL) {
-      // Go ahead and move
-      old_l.unit = NULL;
-      new_l.unit = unit;
-      unit->pos_x = x;
-      unit->pos_y = y;
-      return 0;
-   } else
+   if (new_l.unit != NULL) // Unit in the way
+      return -2;
+
+   if (new_l.ter <= IMPASSABLE_WALL) // Can't go there
       return -1;
+   
+   // Go ahead and move
+   old_l.unit = NULL;
+   new_l.unit = unit;
+   unit->pos_x = x;
+   unit->pos_y = y;
+   return 0;
+}
+
+void addDirection( Direction dir, Vector2u &pos )
+{
+   if (dir == NORTH) {
+      pos.y--;
+   } else if (dir == SOUTH) {
+      pos.y++;
+   } else if (dir == WEST) {
+      pos.x--;
+   } else if (dir == EAST) {
+      pos.x++;
+   } else if (dir == NORTHEAST) {
+      pos.y--;
+      pos.x++;
+   } else if (dir == NORTHWEST) {
+      pos.y--;
+      pos.x--;
+   } else if (dir == SOUTHWEST) {
+      pos.y++;
+      pos.x--;
+   } else if (dir == SOUTHEAST) {
+      pos.y++;
+      pos.x++;
+   }
+}
+
+void keepInBounds( Vector2u &pos )
+{
+   if (pos.x < 0) pos.x = 0;
+   if (pos.x >= current_level->x_dim) pos.x = current_level->x_dim - 1;
+
+   if (pos.y < 0) pos.y = 0;
+   if (pos.y >= current_level->y_dim) pos.y = current_level->y_dim - 1;
 }
 
 int moveUnit( Unit* unit, Direction dir )
 {
    if (unit == NULL) return -1;
 
-   int x_dest = unit->pos_x, y_dest = unit->pos_y;
+   Vector2u dest( unit->pos_x, unit->pos_y );
+   addDirection( dir, dest );
+   keepInBounds( dest );
 
-   // Find destination
-   if (dir == NORTH) {
-      y_dest--;
-   } else if (dir == SOUTH) {
-      y_dest++;
-   } else if (dir == WEST) {
-      x_dest--;
-   } else if (dir == EAST) {
-      x_dest++;
-   } else if (dir == NORTHEAST) {
-      y_dest--;
-      x_dest++;
-   } else if (dir == NORTHWEST) {
-      y_dest--;
-      x_dest--;
-   } else if (dir == SOUTHWEST) {
-      y_dest++;
-      x_dest--;
-   } else if (dir == SOUTHEAST) {
-      y_dest++;
-      x_dest++;
+   return putUnit( unit, dest.x, dest.y );
+}
+
+int destroyUnit( Unit* target )
+{
+   std::stringstream txt;
+   txt << "!" << target->getName() << " destroyed!";
+   writeSystemLog( txt.str() );
+
+   Location &l = current_level->map[target->pos_y][target->pos_x];
+
+   Item *drops = target->inventory;
+   Item *it = drops;
+   if (it != NULL) {
+      while (it->next != NULL)
+         it = it->next;
+
+      it->next = l.items;
+      l.items = drops;
    }
 
-   return putUnit( unit, x_dest, y_dest );
+   l.unit = NULL;
+   target->alive = false;
+
+   return 0;
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -329,7 +370,7 @@ int dropItem( Item *i )
    drop_point.items = i;
 
    writeSystemLog( ">Dropped:" );
-   writeSystemLog( i->getName() );
+   writeSystemLog( i->getNamePadded() );
    return 0;
 }
 
@@ -582,6 +623,25 @@ void buildLimitedInventory( ItemType type ) {
    selection = 0;
 }
 
+Item *invGetAllUsable()
+{
+   Item *first = NULL, *last = NULL, *it = player->inventory;
+
+   while (it != NULL) {
+      if (it->weapon_type == USABLE_WEAPON) {
+         if (first != NULL)
+            first = it;
+         else {
+            last->alt_next = it;
+            last = it;
+         }
+         it->alt_next = NULL;
+      }
+      it = it->next;
+   }
+   return first;
+}
+
 Item *limitedInvSelectedItem()
 {
    Item *i = limited_inventory;
@@ -670,10 +730,245 @@ void examineLocation()
       Item *i = player_loc.items;
       writeSystemLog( ">Items here:" );
       while( i != NULL ) {
-         writeSystemLog( i->getName() );
+         writeSystemLog( i->getNamePadded() );
          i = i->next;
       }
    }
+}
+
+// Movement
+
+int movePlayer( Direction dir )
+{
+   int result = moveUnit( player, dir );
+   if (result == 0) {
+      examineLocation();
+      return player->move_speed;
+   } 
+   else if (result == -1) { // Can't move there
+      return 0;
+   }
+   else if (result == -2) { // Unit in the way
+      // Melee attack enemy unit
+      Vector2u t_loc ( player->pos_x, player->pos_y );
+      addDirection( dir, t_loc );
+      Unit *target = current_level->map[t_loc.y][t_loc.x].unit;
+
+      if (target == NULL) // Impossible?
+         return 0;
+
+      return player->meleeAttack( target );
+   }
+
+   return -1;
+}
+
+// Targetting
+
+Vector2u reticle;
+
+int analyzeTarget( bool print=true )
+{
+   Unit *target = current_level->map[reticle.y][reticle.x].unit;
+
+   if (target == NULL || target == player)
+      return 0;
+
+   if (print) {
+      std::stringstream ss;
+      ss << " ::" << target->getName();
+      writeSystemLog( ss.str() );
+   }
+   return 1;
+}
+
+int targetMoveSelector( Direction dir )
+{
+   addDirection( dir, reticle );
+   keepInBounds( reticle );
+   analyzeTarget();
+   return 0;
+}
+
+int targetSelectNext()
+{
+   int x_start = reticle.x, y_start = reticle.y;
+
+   while( reticle.y < current_level->y_dim) {
+      while( reticle.x < current_level->x_dim) {
+         reticle.x++;
+         if ((current_level->vision_map[reticle.y][reticle.x] & MAP_VISIBLE) &&
+             (current_level->map[reticle.y][reticle.x].unit != NULL)) {
+            if (analyzeTarget())
+               return 0;
+         }
+      }
+      reticle.x = 0;
+      reticle.y++;
+   }
+
+   // Try again from the beginning
+   reticle.x = 0;
+   reticle.y = 0;
+
+   while( reticle.y < current_level->y_dim) {
+      while( reticle.x < current_level->x_dim) {
+         reticle.x++;
+         if ((current_level->vision_map[reticle.y][reticle.x] & MAP_VISIBLE) &&
+             (current_level->map[reticle.y][reticle.x].unit != NULL)) {
+            if (analyzeTarget())
+               return 0;
+         }
+      }
+      reticle.x = 0;
+      reticle.y++;
+   }
+
+   reticle.x = x_start;
+   reticle.y = y_start;
+   return -1;
+}
+
+int targetSelectPrevious()
+{
+   int x_start = reticle.x, y_start = reticle.y;
+
+   while( reticle.y >= 0 ) {
+      while( reticle.x >= 0 ) {
+         reticle.x--;
+         if ((current_level->vision_map[reticle.y][reticle.x] & MAP_VISIBLE) &&
+             (current_level->map[reticle.y][reticle.x].unit != NULL)) {
+            if (analyzeTarget())
+               return 0;
+         }
+      }
+      reticle.x = current_level->x_dim - 1;
+      reticle.y--;
+   }
+
+   // Try again from the beginning
+   reticle.x = current_level->x_dim - 1;
+   reticle.y = current_level->y_dim - 1;
+
+   while( reticle.y >= 0 ) {
+      while( reticle.x >= 0 ) {
+         reticle.x--;
+         if ((current_level->vision_map[reticle.y][reticle.x] & MAP_VISIBLE) &&
+             (current_level->map[reticle.y][reticle.x].unit != NULL)) {
+            if (analyzeTarget())
+               return 0;
+         }
+      }
+      reticle.x = current_level->x_dim - 1;
+      reticle.y--;
+   }
+
+   reticle.x = x_start;
+   reticle.y = y_start;
+   return -1;
+}
+
+
+// Using tactical things
+
+/* Things you could be selecting for:
+ * - Ranged attack (F)
+ * - System usage (S)
+ * - Usable item (U)
+ */
+
+Item *usable_stack = NULL;
+int usable_count = 0;
+WeaponType usable_type;
+
+void initTacticalStack()
+{
+   max_selection = 0;
+   selection = 0;
+
+   Item *item = usable_stack;
+   if (usable_stack == NULL)
+      writeSystemLog( "Usable Stack is empty" );
+
+   while( item != NULL) {
+      max_selection++;
+      item = item->alt_next;
+   }
+   std::stringstream ss;
+   ss << "Max selection: " << max_selection;
+   writeSystemLog( ss.str() );
+}
+
+int initTacticalSelection( WeaponType type )
+{
+   usable_type = type;
+   if (type == RANGED_WEAPON) {
+      usable_stack = player->chassis->getAllRanged();
+
+   } else if (type == TACTICAL_WEAPON) {
+      usable_stack = player->chassis->getAllTactical();
+
+   } else if (type == USABLE_WEAPON) {
+      usable_stack = invGetAllUsable();
+
+   }
+
+   if (usable_stack == NULL)
+      return -1;
+
+   initTacticalStack();
+   return 0;
+}
+
+int use()
+{
+   Item *use_item = usable_stack;
+   for (int i = 0; i < selection && use_item; ++i)
+      use_item = use_item->alt_next;
+
+   if (use_item == NULL)
+      return -1;
+   
+   if (use_item->targetted == true)
+      return 1; // Go to targetting
+
+   writeSystemLog( "TODO: Using item" );
+
+   return 0;
+}
+
+int fire()
+{
+   Item *use_item = usable_stack;
+   for (int i = 0; i < selection && use_item; ++i)
+      use_item = use_item->alt_next;
+
+   if (use_item == NULL)
+      return -1;
+
+   Unit *target = current_level->map[reticle.y][reticle.x].unit;
+   if (use_item->weapon_type == RANGED_WEAPON) {
+      use_item->rangedAttack( target );
+      return 0;
+   }
+   if (use_item->weapon_type == TACTICAL_WEAPON) {
+      //use_item->tactical( target );
+      return 0;
+   }
+
+   return 0;
+}
+
+int drawUsableInventory()
+{
+   if (usable_type == RANGED_WEAPON)
+      return drawItemStack( usable_stack, "Ranged Weaponry:", true );
+   if (usable_type == TACTICAL_WEAPON)
+      return drawItemStack( usable_stack, "Tactical Weaponry:", true );
+   if (usable_type == USABLE_WEAPON)
+      return drawItemStack( usable_stack, "Usable Items:", true );
+
+   return -1;
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -737,19 +1032,20 @@ void testLevel()
 
    player->chassis = new BasicChassis();
    player->chassis->addArm( new ClawArm() );
-   player->chassis->addArm( new ClawArm() );
+   player->chassis->addArm( new Laser() );
 
    for (int s = 0; s < 20; ++s)
       addToInventory( new ClawArm() );
 
    for (int r = 0; r < 20; ++r)
-      addToInventory( new EnergyLance() );
+      addToInventory( new HammerArm() );
 
    addToInventory( new Laser() );
 
    Unit* rr = new AI();
    putUnit( rr, 27, 28 );
    addUnitToQueue( rr, 500 );
+   rr->inventory = new EnergyLance();
 
    game_state = ON_MAP;
    clearSystemLog();
@@ -862,6 +1158,61 @@ int sendKeyToGame( Keyboard::Key k, int mod )
    }
    
    if (game_state == SELECTING_ABILITY) {
+      if (k == Keyboard::Escape || k == Keyboard::BackSpace) {
+         game_state = ON_MAP;
+      } else
+      if (k == Keyboard::Numpad2 || k == Keyboard::Down) {
+         selectionDown(); } else
+      if (k == Keyboard::Numpad8 || k == Keyboard::Up) {
+         selectionUp(); } else
+      if (k == Keyboard::PageDown) {
+         selectionPageDown(); } else
+      if (k == Keyboard::PageUp) {
+         selectionPageUp(); } else
+      if (k == Keyboard::Space || k == Keyboard::Return) {
+         if (use() == 1) {
+            game_state = TARGETTING;
+            targetSelectNext();
+         } else {
+            game_state = ON_MAP;
+         }
+      }
+
+      return 0;
+   }
+
+   if (game_state == TARGETTING) {
+      if (k == Keyboard::Escape || k == Keyboard::BackSpace) {
+         game_state = SELECTING_ABILITY;
+      } else
+      if (k == Keyboard::Numpad1){
+         targetMoveSelector( SOUTHWEST ); } else
+      if (k == Keyboard::Numpad2 || k == Keyboard::Down){
+         targetMoveSelector( SOUTH ); } else
+      if (k == Keyboard::Numpad3){
+         targetMoveSelector( SOUTHEAST ); } else
+      if (k == Keyboard::Numpad4 || k == Keyboard::Left){
+         targetMoveSelector( WEST ); } else
+      if (k == Keyboard::Numpad6 || k == Keyboard::Right){
+         targetMoveSelector( EAST ); } else
+      if (k == Keyboard::Numpad7){
+         targetMoveSelector( NORTHWEST ); } else
+      if (k == Keyboard::Numpad8 || k == Keyboard::Up){
+         targetMoveSelector( NORTH ); } else
+      if (k == Keyboard::Numpad9){
+         targetMoveSelector( NORTHEAST ); } else
+      if (k == Keyboard::N || k == Keyboard::PageDown) {
+         targetSelectNext(); } else
+      if (k == Keyboard::P || k == Keyboard::PageUp) {
+         targetSelectPrevious(); } else
+      if (k == Keyboard::Space || k == Keyboard::Return) {
+         if (analyzeTarget(false)) {
+            fire();
+            game_state = ON_MAP;
+         } else {
+            writeSystemLog( ">ERROR: No target selected" );
+         }
+      }
 
       return 0;
    }
@@ -886,7 +1237,7 @@ int sendKeyToGame( Keyboard::Key k, int mod )
             addToInventory( selected );
             max_selection--;
             if (selection == max_selection) selection--;
-            writeSystemLog( selected->getName() );
+            writeSystemLog( selected->getNamePadded() );
          }
          if (item_stack == NULL) {
             current_level->map[player->pos_y][player->pos_x].items = item_stack;
@@ -965,7 +1316,7 @@ int sendKeyToGame( Keyboard::Key k, int mod )
          } else {
             addToInventory( retval );
             writeSystemLog( ">Unequipped:" );
-            writeSystemLog( retval->getName() );
+            writeSystemLog( retval->getNamePadded() );
          }
       }
 
@@ -1034,7 +1385,7 @@ int sendKeyToGame( Keyboard::Key k, int mod )
 
          if (player_loc.items->next == NULL) { // Pick up the one item
             addToInventory( player_loc.items );
-            writeSystemLog( player_loc.items->getName() );
+            writeSystemLog( player_loc.items->getNamePadded() );
             player_loc.items = NULL;
             return 0;
          }
@@ -1049,55 +1400,35 @@ int sendKeyToGame( Keyboard::Key k, int mod )
          return 0;
       }
 
+      // Items
+
+      if (k == Keyboard::F) {
+         if (initTacticalSelection( RANGED_WEAPON ) == -1) {
+            writeSystemLog( ">ERROR: NO RANGED" );
+            writeSystemLog( " WEAPONRY EQUIPPED" );
+         }
+         else
+            game_state = SELECTING_ABILITY;
+         return 0;
+      }
+
       // Movement
       if (k == Keyboard::Numpad1){
-         int result = moveUnit(player,SOUTHWEST);
-         if (result == 0) {
-            speed=player->move_speed;
-            examineLocation();
-         } } else
-      if (k == Keyboard::Numpad2){
-         int result = moveUnit(player,SOUTH);
-         if (result == 0) {
-            speed=player->move_speed;
-            examineLocation();
-         } } else
+         speed = movePlayer( SOUTHWEST ); } else
+      if (k == Keyboard::Numpad2 || k == Keyboard::Down){
+         speed = movePlayer( SOUTH ); } else
       if (k == Keyboard::Numpad3){
-         int result = moveUnit(player,SOUTHEAST);
-         if (result == 0) {
-            speed=player->move_speed;
-            examineLocation();
-         } } else
-      if (k == Keyboard::Numpad4){
-         int result = moveUnit(player,WEST);
-         if (result == 0) {
-            speed=player->move_speed;
-            examineLocation();
-         } } else
-      if (k == Keyboard::Numpad6){
-         int result = moveUnit(player,EAST);
-         if (result == 0) {
-            speed=player->move_speed;
-            examineLocation();
-         } } else
+         speed = movePlayer( SOUTHEAST ); } else
+      if (k == Keyboard::Numpad4 || k == Keyboard::Left){
+         speed = movePlayer( WEST ); } else
+      if (k == Keyboard::Numpad6 || k == Keyboard::Right){
+         speed = movePlayer( EAST ); } else
       if (k == Keyboard::Numpad7){
-         int result = moveUnit(player,NORTHWEST);
-         if (result == 0) {
-            speed=player->move_speed;
-            examineLocation();
-         } } else
-      if (k == Keyboard::Numpad8){
-         int result = moveUnit(player,NORTH);
-         if (result == 0) {
-            speed=player->move_speed;
-            examineLocation();
-         } } else
+         speed = movePlayer( NORTHWEST ); } else
+      if (k == Keyboard::Numpad8 || k == Keyboard::Up){
+         speed = movePlayer( NORTH ); } else
       if (k == Keyboard::Numpad9){
-         int result = moveUnit(player,NORTHEAST);
-         if (result == 0) {
-            speed=player->move_speed;
-            examineLocation();
-         } }
+         speed = movePlayer( NORTHEAST ); }
 
       addUnitToQueue( player, speed );
       clearCurrentUnit();
@@ -1129,6 +1460,11 @@ int playGame()
 
       // TODO: AI goes here
       int speed = current_unit->takeTurn();
+      if (speed == -1) { // Unit is dead
+         delete current_unit;
+         clearCurrentUnit();
+         return 0;
+      }
       addUnitToQueue( current_unit, speed );
       clearCurrentUnit();
 
@@ -1166,7 +1502,7 @@ void drawSystemLog()
 
    for (y = 26; y > 2; --y) {
       if (log_it == log_end)
-         return;
+         break;
 
       writeString( *log_it, C_WHITE, C_BLACK, start_col+1, y );
       ++log_it;
@@ -1205,6 +1541,10 @@ int displayGame()
    {
       drawInventory();
    }
+   else if (game_state == SELECTING_ABILITY) 
+   {
+      drawUsableInventory();
+   } 
    else
    {
       int x_start = 0;
@@ -1248,6 +1588,12 @@ int displayGame()
             if (visibility & MAP_SEEN && !(visibility & MAP_VISIBLE))
                dim( x, y, x, y );
          }
+      }
+
+      if (game_state == TARGETTING) {
+         int x = reticle.x - map_view_base.x,
+             y = reticle.y - map_view_base.y;
+         colorInvert( x, y, x, y );
       }
    }
 
